@@ -590,16 +590,28 @@ export const GeminiChatbot: React.FC = () => {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 className="p-2.5 rounded-xl bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] text-gray-400 hover:text-[#38bdf8] transition-colors"
-                title="Upload photo for visual analysis"
+                title="Upload photo from disk for AI vision analysis"
               >
                 <ImageIcon className="w-5 h-5" />
               </button>
 
               <button
                 type="button"
-                onClick={() => setActiveChatMode('lens')}
+                onClick={() => {
+                  setActiveChatMode('lens');
+                  setIsWebcamActive(true);
+                }}
                 className="p-2.5 rounded-xl bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] text-gray-400 hover:text-emerald-400 transition-colors"
-                title="Open Google Lens Hardware Vision"
+                title="Capture live camera snapshot of circuit board / component"
+              >
+                <Camera className="w-5 h-5" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveChatMode('lens')}
+                className="p-2.5 rounded-xl bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] text-gray-400 hover:text-cyan-400 transition-colors"
+                title="Open Google Lens Hardware Vision Suite"
               >
                 <Scan className="w-5 h-5" />
               </button>

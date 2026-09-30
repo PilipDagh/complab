@@ -808,31 +808,64 @@ If the user provides an image, carefully analyze the visual hardware clues (e.g.
 ${ownerContext ? `\nActive Lab Master Context:\n${ownerContext}\n*Notice: You have access to the above bench context. Reference active projects and lab notes when answering to provide personalized shop assistance.*` : ''}
 `;
 
-      const response = await fetch('/api/gemini/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: text,
-          history: chatMessages.slice(-8),
-          systemInstruction: baseSystemPrompt,
-          model: selectedModel,
-          thinkingMode: isThinkingMode,
-          image: image || null,
-        }),
-      });
+      let data: any = null;
+      let lastError: any = null;
+      const maxClientRetries = 3;
 
-      const data = await response.json();
+      for (let attempt = 0; attempt < maxClientRetries; attempt++) {
+        try {
+          const response = await fetch('/api/gemini/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt: text,
+              history: chatMessages.slice(-8),
+              systemInstruction: baseSystemPrompt,
+              model: selectedModel,
+              thinkingMode: isThinkingMode,
+              image: image || null,
+            }),
+          });
 
-      if (!response.ok && !data.reply) {
-        throw new Error(data.error || 'Server returned an error.');
+          data = await response.json();
+
+          if (response.ok && data?.reply) {
+            break; // Success!
+          }
+
+          if (response.status === 503 || data?.status === 'notice') {
+            if (attempt < maxClientRetries - 1) {
+              const backoffMs = 800 * Math.pow(1.8, attempt) + Math.random() * 200;
+              addToast({
+                type: 'info',
+                title: 'High Demand Detected',
+                message: `Retrying with exponential backoff (${attempt + 1}/${maxClientRetries})...`,
+              });
+              await new Promise((r) => setTimeout(r, backoffMs));
+              continue;
+            }
+          }
+
+          if (data?.reply) {
+            break;
+          }
+          throw new Error(data?.error || `HTTP ${response.status}`);
+        } catch (fetchErr: any) {
+          lastError = fetchErr;
+          if (attempt < maxClientRetries - 1) {
+            const backoffMs = 800 * Math.pow(1.8, attempt) + Math.random() * 200;
+            await new Promise((r) => setTimeout(r, backoffMs));
+            continue;
+          }
+        }
       }
 
       const botReply: ChatMessage = {
         id: 'bot_' + Date.now(),
         role: 'assistant',
-        content: data.reply || 'No response received from diagnostic assistant.',
+        content: data?.reply || 'Diagnostic assistant response received.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        modelUsed: data.modelUsed || selectedModel,
+        modelUsed: data?.modelUsed || selectedModel,
         contextInjected: !!ownerContext,
       };
 

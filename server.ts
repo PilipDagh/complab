@@ -35,7 +35,76 @@ const getAiClient = () => {
   });
 };
 
-// Robust model invocation with automatic retry & fallback for high-demand 503s or quota issues
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Helper to sanitize and format conversation contents for Gemini API (prevents role order errors)
+function formatGeminiContents(history: any[], currentPrompt: string, image?: any): any[] {
+  const contents: any[] = [];
+
+  // Filter and sanitize history
+  if (Array.isArray(history)) {
+    for (const msg of history) {
+      if (!msg || !msg.content || typeof msg.content !== 'string') continue;
+      // Skip welcome greeting or system messages that shouldn't be the leading turn
+      if (msg.id === 'msg_welcome') continue;
+
+      const role = msg.role === 'assistant' ? 'model' : 'user';
+
+      // Gemini requires first turn to be 'user'
+      if (contents.length === 0 && role === 'model') {
+        continue;
+      }
+
+      // Avoid consecutive turns with identical role by merging
+      if (contents.length > 0 && contents[contents.length - 1].role === role) {
+        contents[contents.length - 1].parts.push({ text: msg.content });
+      } else {
+        contents.push({
+          role,
+          parts: [{ text: msg.content }],
+        });
+      }
+    }
+  }
+
+  // Current turn parts
+  const currentParts: any[] = [];
+
+  // If image provided
+  if (image && image.data) {
+    let cleanBase64 = image.data;
+    if (typeof cleanBase64 === 'string' && cleanBase64.includes(';base64,')) {
+      cleanBase64 = cleanBase64.split(';base64,')[1];
+    }
+    const mimeType = image.mimeType || 'image/jpeg';
+    currentParts.push({
+      inlineData: {
+        mimeType: mimeType === 'image/svg+xml' ? 'image/png' : mimeType,
+        data: cleanBase64,
+      },
+    });
+  }
+
+  if (currentPrompt && currentPrompt.trim()) {
+    currentParts.push({ text: currentPrompt.trim() });
+  } else if (currentParts.length === 0) {
+    currentParts.push({ text: 'Please diagnose this hardware issue.' });
+  }
+
+  // If previous turn in history was user, merge to adhere to alternation
+  if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
+    contents[contents.length - 1].parts.push(...currentParts);
+  } else {
+    contents.push({
+      role: 'user',
+      parts: currentParts,
+    });
+  }
+
+  return contents;
+}
+
+// Robust model invocation with automatic exponential backoff retry & fallback for high-demand 503s or quota issues
 async function generateWithModelFallback(
   ai: GoogleGenAI,
   preferredModel: string,
@@ -50,40 +119,52 @@ async function generateWithModelFallback(
     'gemini-3.8-flash',
   ].filter((m, idx, arr) => arr.indexOf(m) === idx);
 
-  let lastError: any = null;
+  for (let modelIdx = 0; modelIdx < candidateModels.length; modelIdx++) {
+    const currentModel = candidateModels[modelIdx];
+    const maxRetries = 3;
 
-  for (let attempt = 0; attempt < candidateModels.length; attempt++) {
-    const currentModel = candidateModels[attempt];
-    try {
-      const config = { ...baseConfig };
-      // Thinking mode is only supported on gemini-3.1-pro-preview
-      if (currentModel !== 'gemini-3.1-pro-preview' && config.thinkingConfig) {
-        delete config.thinkingConfig;
-      }
+    for (let retry = 0; retry < maxRetries; retry++) {
+      try {
+        const config = { ...baseConfig };
+        // Thinking mode is only supported on gemini-3.1-pro-preview
+        if (currentModel !== 'gemini-3.1-pro-preview' && config.thinkingConfig) {
+          delete config.thinkingConfig;
+        }
 
-      console.log(`[Gemini Engine] Querying model ${currentModel} (attempt ${attempt + 1}/${candidateModels.length})...`);
-      const response = await ai.models.generateContent({
-        model: currentModel,
-        contents,
-        config,
-      });
+        console.log(`[Gemini Engine] Querying model ${currentModel} (attempt ${retry + 1}/${maxRetries})...`);
+        const response = await ai.models.generateContent({
+          model: currentModel,
+          contents,
+          config,
+        });
 
-      if (response && response.text) {
-        return {
-          text: response.text,
-          modelUsed: currentModel,
-          isFallback: currentModel !== preferredModel,
-        };
-      }
-    } catch (err: any) {
-      lastError = err;
-      console.warn(
-        `[Gemini Engine Warning] Model ${currentModel} error: ${err?.message || err}. Attempting fallback...`
-      );
+        if (response && response.text) {
+          return {
+            text: response.text,
+            modelUsed: currentModel,
+            isFallback: currentModel !== preferredModel,
+          };
+        }
+      } catch (err: any) {
+        const errMsg = err?.message || String(err);
+        console.warn(`[Gemini Engine Warning] Model ${currentModel} try ${retry + 1} failed: ${errMsg}`);
 
-      // If there are more models in candidateModels, proceed directly to the next model
-      if (attempt < candidateModels.length - 1) {
-        continue;
+        const isTransient =
+          errMsg.includes('503') ||
+          errMsg.includes('UNAVAILABLE') ||
+          errMsg.includes('429') ||
+          errMsg.includes('RESOURCE_EXHAUSTED') ||
+          errMsg.includes('high demand') ||
+          errMsg.includes('fetch failed');
+
+        if (isTransient && retry < maxRetries - 1) {
+          // Exponential backoff with jitter: 600ms, 1200ms, 2400ms
+          const delay = Math.min(600 * Math.pow(2, retry) + Math.random() * 200, 3000);
+          console.log(`[Gemini Engine] Backing off for ${Math.round(delay)}ms before retry...`);
+          await sleep(delay);
+          continue;
+        }
+        break; // Proceed to next candidate model
       }
     }
   }
@@ -148,37 +229,8 @@ app.post('/api/gemini/chat', async (req, res) => {
       });
     }
 
-    // Format contents with history
-    const contents: any[] = [];
-
-    // Append prior history turns
-    if (Array.isArray(history)) {
-      for (const msg of history) {
-        contents.push({
-          role: msg.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: msg.content || '' }],
-        });
-      }
-    }
-
-    // Current turn parts
-    const currentParts: any[] = [];
-    if (image && image.data && image.mimeType) {
-      currentParts.push({
-        inlineData: {
-          mimeType: image.mimeType,
-          data: image.data,
-        },
-      });
-    }
-    if (prompt) {
-      currentParts.push({ text: prompt });
-    }
-
-    contents.push({
-      role: 'user',
-      parts: currentParts,
-    });
+    // Format contents safely with history and images
+    const contents = formatGeminiContents(history, prompt, image);
 
     const chosenModel = model || 'gemini-3.1-flash-lite';
     const config: any = {};
