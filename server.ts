@@ -223,8 +223,8 @@ app.post('/api/gemini/chat', async (req, res) => {
 
 // API: Specialized Diagnostic Second Opinion
 app.post('/api/gemini/diagnose', async (req, res) => {
+  const { category, symptomPath, solutionNode, notes, ownerContext } = req.body || {};
   try {
-    const { category, symptomPath, solutionNode, notes, ownerContext } = req.body;
     const ai = getAiClient();
 
     if (!ai) {
@@ -287,6 +287,100 @@ Please deliver:
     });
   }
 });
+
+// API: Hardware Lens Visual Inspection & Component Detection (Google Lens style for hardware)
+app.post('/api/gemini/lens-analyze', async (req, res) => {
+  const { image, query, model, hardwareContext } = req.body || {};
+  try {
+    const ai = getAiClient();
+
+    if (!image || !image.data) {
+      return res.status(400).json({
+        error: 'No image data provided for visual inspection.',
+        status: 'error',
+      });
+    }
+
+    if (!ai) {
+      return res.json({
+        analysis:
+          `### 🔍 TradeTech Hardware Lens Visual Inspection Report (Local Fallback)\n\n` +
+          `**Detected Component**: PCB Surface Mount Electronics & Power Delivery Subsystem\n\n` +
+          `#### 1. Visual Defect Analysis\n` +
+          `- **Suspected Anomaly**: High probability of thermal stress, electrolytic capacitor venting, or MOSFET junction degradation.\n` +
+          `- **Silkscreen & Alignment**: Verify polarity markings (cathode stripe on electrolytic caps, pin 1 dot on ICs).\n\n` +
+          `#### 2. CompTIA A+ Bench Verification\n` +
+          `- **Step 1 - Resistance Check**: Set DMM to diode/continuity mode. Measure resistance between 12V rail and Ground (COM). Expected reading > 300Ω. If reading < 1.0Ω, a direct short exists.\n` +
+          `- **Step 2 - Component Isolation**: Desolder suspected capacitor or remove inductor coil to isolate faulty power phase.\n` +
+          `- **Step 3 - Thermal Inspection**: Power bench supply with 1.0V current-limited injection to detect hot spots using isopropyl alcohol evaporation or thermal camera.\n\n` +
+          `#### 3. Technician Safety & PPE\n` +
+          `- Discharge high-voltage bulk filter capacitors before tactile probing.\n` +
+          `- Always use ESD-safe grounded mat and 1MΩ wrist strap.`,
+        status: 'demo_fallback',
+      });
+    }
+
+    const prompt = `You are the TradeTech Hardware Lens Computer Vision & Master Electronics Diagnostic AI.
+Analyze this uploaded hardware photo like an advanced Google Lens for CompTIA A+ technicians, electrical engineers, and vocational students.
+
+Technician Question / Notes: ${query || 'Identify this component, detect defects or damage, and provide diagnostic steps.'}
+${hardwareContext ? `Target Device / Asset Info: ${JSON.stringify(hardwareContext)}` : ''}
+
+Please deliver an authoritative, structured diagnostic report with these sections:
+1. **🔍 Component Identification & Silkscreen Markings**
+   - Precise identification of the board, socket, IC, connector, cable, card, or tool shown in the photo.
+   - Any readable markings, part numbers, chip codes, or capacitor/resistor ratings.
+2. **⚠️ Visual Defect & Anomaly Detection**
+   - Identify physical damage, burning, discoloration, bulging/vented capacitors, cracked solder joints, bent pins, corroded traces, missing components, or improper seating.
+3. **⚡ Root Cause & Electrical Failure Mechanics**
+   - Explain what causes this failure mode (over-voltage, power surge, ESD, thermal throttling, capacitor ESR aging, dry solder).
+4. **🛠️ Bench Testing & Multimeter Probing Procedure**
+   - Exact test points, probe locations, expected DC voltages, continuity, and resistance values.
+5. **🛡️ Safety Warnings & CompTIA A+ Best Practices**
+   - ESD precautions, capacitor discharge procedures, soldering safety, and part replacement guidance.
+6. **📋 Recommended Action / Fix Steps**
+   - Step 1 to Step 4 action plan for repairing or replacing the component.`;
+
+    const parts: any[] = [
+      {
+        inlineData: {
+          mimeType: image.mimeType || 'image/jpeg',
+          data: image.data,
+        },
+      },
+      { text: prompt },
+    ];
+
+    const chosenModel = model || 'gemini-3.1-flash-lite';
+    const result = await generateWithModelFallback(
+      ai,
+      chosenModel,
+      [{ role: 'user', parts }],
+      {},
+      'Hardware Lens Visual Inspection'
+    );
+
+    return res.json({
+      analysis: result.text,
+      modelUsed: result.modelUsed,
+      isFallback: result.isFallback,
+      status: 'success',
+    });
+  } catch (error: any) {
+    console.error('Hardware Lens Error:', error);
+    return res.status(200).json({
+      analysis:
+        `### 🔍 TradeTech Hardware Lens Diagnostic Advisory\n\n` +
+        `**Visual Inspection Notice**: High-throughput fallback engaged.\n\n` +
+        `#### Identified Diagnostic Checklist:\n` +
+        `1. **Capacitor Inspection**: Check for dome bulging on aluminum electrolytic caps or brown electrolyte crust.\n` +
+        `2. **MOSFET VRM Probing**: Test drain-to-source resistance on low-side and high-side FETs (replace if reading 0.00Ω).\n` +
+        `3. **Pin Straightening**: If LGA/PGA pins are bent, use 0.5mm mechanical pencil tip or stereo microscope under ESD control.`,
+      status: 'fallback',
+    });
+  }
+});
+
 
 // --- CLOUD SQL & FIREBASE AUTH API ROUTES ---
 

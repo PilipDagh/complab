@@ -54,6 +54,30 @@
       },
       "required": ["title", "benchNumber", "reportedFault", "status"]
     },
+    "HardwareAsset": {
+      "title": "HardwareAsset",
+      "description": "Hardware device specification and repair history record scanned via QR code or barcode",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Asset tag identifier or document ID" },
+        "assetTag": { "type": "string", "description": "Scannable hardware asset tag code" },
+        "serialNumber": { "type": "string", "description": "OEM serial number" },
+        "model": { "type": "string", "description": "Hardware device model" },
+        "deviceType": { "type": "string", "description": "Device type category" },
+        "assignedBench": { "type": "string", "description": "Assigned lab bench or network rack" },
+        "department": { "type": "string", "description": "Owner department or laboratory" },
+        "status": { "type": "string", "description": "Operational status" },
+        "specs": { "type": "object", "description": "Hardware specifications (CPU, RAM, GPU, PSU, etc.)" },
+        "purchaseDate": { "type": "string", "description": "Date of acquisition" },
+        "warrantyExpiry": { "type": "string", "description": "Warranty expiration date" },
+        "notes": { "type": "string", "description": "Bench maintenance notes" },
+        "repairHistory": { "type": "array", "description": "List of previous repair actions and parts replaced" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "description": "Last updated timestamp" },
+        "authorUid": { "type": "string", "description": "UID of author" }
+      },
+      "required": ["id", "assetTag", "model", "deviceType", "status"]
+    },
     "SystemMeta": {
       "title": "SystemMeta",
       "description": "System state tracking first user registered",
@@ -77,6 +101,10 @@
     "/projects/{projectId}": {
       "schema": "#/entities/Project",
       "description": "Active work orders and completed past bench repairs"
+    },
+    "/hardware_assets/{assetId}": {
+      "schema": "#/entities/HardwareAsset",
+      "description": "Scannable hardware inventory with device specifications and chronological repair histories"
     },
     "/system/metadata": {
       "schema": "#/entities/SystemMeta",

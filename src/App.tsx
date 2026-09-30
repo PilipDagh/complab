@@ -2,6 +2,7 @@ import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/Header';
 import { AuthModal } from './components/AuthModal';
+import { AssetQRScannerModal } from './components/AssetQRScannerModal';
 import { DiagnosticWizard } from './components/DiagnosticWizard';
 import { GeminiChatbot } from './components/GeminiChatbot';
 import { BenchReference } from './components/BenchReference';
@@ -64,6 +65,7 @@ const MainContent: React.FC = () => {
 
       {/* Modals and Toasts */}
       <AuthModal />
+      <AssetQRScannerModal />
       <Toast />
     </div>
   );

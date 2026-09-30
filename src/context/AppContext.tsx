@@ -6,12 +6,15 @@ import {
   DailyActivityLog,
   ProjectWorkOrder,
   DiagnosticNode,
+  HardwareAsset,
+  AssetRepairLog,
 } from '../types';
 import {
   INITIAL_USERS,
   INITIAL_DIAGNOSTIC_CATEGORIES,
   INITIAL_CALENDAR_LOGS,
   INITIAL_PROJECT_WORK_ORDERS,
+  INITIAL_HARDWARE_ASSETS,
 } from '../data/seedData';
 import { auth, googleAuthProvider } from '../lib/firebase.ts';
 import {
@@ -31,6 +34,12 @@ import {
   saveProjectToFirestore,
   updateProjectInFirestore,
   deleteProjectFromFirestore,
+  fetchHardwareAssetsFromFirestore,
+  getHardwareAssetFromFirestore,
+  saveHardwareAssetToFirestore,
+  updateHardwareAssetInFirestore,
+  addRepairLogToAssetInFirestore,
+  deleteHardwareAssetFromFirestore,
 } from '../lib/firestoreService.ts';
 
 export type AppTab = 'diagnostic' | 'reference' | 'gemini' | 'calendar';
@@ -98,6 +107,17 @@ interface AppContextType {
   exportDataJson: () => void;
   exportDataTxt: () => string;
 
+  // Hardware Assets & QR Scanner (Firestore persistent)
+  hardwareAssets: HardwareAsset[];
+  activeScannedAsset: HardwareAsset | null;
+  setActiveScannedAsset: (asset: HardwareAsset | null) => void;
+  isScannerModalOpen: boolean;
+  setIsScannerModalOpen: (open: boolean) => void;
+  lookupHardwareAsset: (assetTagOrId: string) => Promise<HardwareAsset | null>;
+  saveHardwareAsset: (asset: HardwareAsset) => Promise<void>;
+  addAssetRepairLog: (assetId: string, log: Omit<AssetRepairLog, 'id' | 'date'>) => Promise<void>;
+  deleteHardwareAsset: (assetId: string) => Promise<void>;
+
   // Toast
   toasts: ToastMessage[];
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
@@ -115,6 +135,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Standard Web User Login: GUEST by default unless previously logged in via Chrome/Browser session!
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+
+  // Hardware Assets & QR Scanner State
+  const [hardwareAssets, setHardwareAssets] = useState<HardwareAsset[]>(INITIAL_HARDWARE_ASSETS);
+  const [activeScannedAsset, setActiveScannedAsset] = useState<HardwareAsset | null>(null);
+  const [isScannerModalOpen, setIsScannerModalOpen] = useState<boolean>(false);
 
   // Toast System
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -195,6 +220,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             await saveProjectToFirestore(initProj);
           }
           setProjects(INITIAL_PROJECT_WORK_ORDERS);
+        }
+
+        // Fetch Hardware Assets from Firestore
+        const fsAssets = await fetchHardwareAssetsFromFirestore();
+        if (fsAssets && fsAssets.length > 0) {
+          setHardwareAssets(fsAssets);
+        } else {
+          // Seed initial hardware assets to Firestore
+          for (const initAsset of INITIAL_HARDWARE_ASSETS) {
+            await saveHardwareAssetToFirestore(initAsset);
+          }
+          setHardwareAssets(INITIAL_HARDWARE_ASSETS);
         }
       } catch (err) {
         console.warn('Firestore initial data load notice (using memory defaults):', err);
@@ -529,6 +566,133 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // --- HARDWARE ASSET & QR SCANNER OPERATIONS ---
+
+  const lookupHardwareAsset = async (assetTagOrId: string): Promise<HardwareAsset | null> => {
+    const cleanTag = assetTagOrId.trim();
+    if (!cleanTag) return null;
+
+    // 1. Check local state first for fast response
+    const foundLocal = hardwareAssets.find(
+      (a) =>
+        a.assetTag.toLowerCase() === cleanTag.toLowerCase() ||
+        a.id.toLowerCase() === cleanTag.toLowerCase() ||
+        a.serialNumber.toLowerCase() === cleanTag.toLowerCase()
+    );
+
+    if (foundLocal) {
+      setActiveScannedAsset(foundLocal);
+      return foundLocal;
+    }
+
+    // 2. Query Firestore directly
+    try {
+      const fsAsset = await getHardwareAssetFromFirestore(cleanTag);
+      if (fsAsset) {
+        setHardwareAssets((prev) => {
+          const exists = prev.some((a) => a.id === fsAsset.id);
+          return exists ? prev.map((a) => (a.id === fsAsset.id ? fsAsset : a)) : [fsAsset, ...prev];
+        });
+        setActiveScannedAsset(fsAsset);
+        return fsAsset;
+      }
+    } catch (err) {
+      console.error('Error looking up hardware asset from Firestore:', err);
+    }
+
+    return null;
+  };
+
+  const saveHardwareAsset = async (asset: HardwareAsset) => {
+    setHardwareAssets((prev) => {
+      const exists = prev.some((a) => a.id === asset.id || a.assetTag === asset.assetTag);
+      return exists
+        ? prev.map((a) => (a.id === asset.id || a.assetTag === asset.assetTag ? asset : a))
+        : [asset, ...prev];
+    });
+
+    if (activeScannedAsset?.id === asset.id || activeScannedAsset?.assetTag === asset.assetTag) {
+      setActiveScannedAsset(asset);
+    }
+
+    // Persist to Firestore
+    try {
+      await saveHardwareAssetToFirestore(asset);
+      addToast({
+        type: 'success',
+        title: 'Asset Saved to Firestore',
+        message: `Hardware asset [${asset.assetTag}] stored in cloud database.`,
+      });
+    } catch (err) {
+      console.error('Error saving hardware asset to Firestore:', err);
+    }
+  };
+
+  const addAssetRepairLog = async (
+    assetId: string,
+    logData: Omit<AssetRepairLog, 'id' | 'date'>
+  ) => {
+    const newLog: AssetRepairLog = {
+      id: 'rep_' + Date.now(),
+      date: new Date().toISOString().split('T')[0],
+      ...logData,
+    };
+
+    const targetAsset = hardwareAssets.find((a) => a.id === assetId || a.assetTag === assetId);
+    const currentHistory = targetAsset ? targetAsset.repairHistory || [] : [];
+    const updatedHistory = [newLog, ...currentHistory];
+
+    setHardwareAssets((prev) =>
+      prev.map((a) =>
+        a.id === assetId || a.assetTag === assetId
+          ? { ...a, repairHistory: updatedHistory, updatedAt: new Date().toISOString() }
+          : a
+      )
+    );
+
+    if (activeScannedAsset?.id === assetId || activeScannedAsset?.assetTag === assetId) {
+      setActiveScannedAsset((prev) =>
+        prev
+          ? {
+              ...prev,
+              repairHistory: updatedHistory,
+              updatedAt: new Date().toISOString(),
+            }
+          : null
+      );
+    }
+
+    // Persist in Firestore
+    try {
+      await addRepairLogToAssetInFirestore(assetId, newLog, currentHistory);
+      addToast({
+        type: 'success',
+        title: 'Repair Record Appended',
+        message: `Added repair entry to Firestore for asset [${assetId}].`,
+      });
+    } catch (err) {
+      console.error('Error appending repair log in Firestore:', err);
+    }
+  };
+
+  const deleteHardwareAsset = async (assetId: string) => {
+    setHardwareAssets((prev) => prev.filter((a) => a.id !== assetId && a.assetTag !== assetId));
+    if (activeScannedAsset?.id === assetId || activeScannedAsset?.assetTag === assetId) {
+      setActiveScannedAsset(null);
+    }
+
+    try {
+      await deleteHardwareAssetFromFirestore(assetId);
+      addToast({
+        type: 'warning',
+        title: 'Asset Deleted',
+        message: `Hardware asset [${assetId}] deleted from Firestore.`,
+      });
+    } catch (err) {
+      console.error('Error deleting hardware asset from Firestore:', err);
+    }
+  };
+
   // Helper to compile owner context
   const getOwnerContextPayload = (): string => {
     if (!currentUser || currentUser.role !== 'ROLE_OWNER') {
@@ -548,6 +712,13 @@ Lab Topics Covered Today: ${todayLog?.topicsCovered || 'Hardware diagnostics lab
 Bench Repairs In Progress Today: ${todayLog?.benchRepairsPerformed || 'Standard technician bench rotation'}
 Parts Used / Ordered: ${todayLog?.partsUsedOrOrdered || 'None recorded'}
 Safety / Lab Directives: ${todayLog?.specialNotesAndSafety || 'Standard ESD grounding wrist straps required'}
+${
+  activeScannedAsset
+    ? `\nActive Scanned Hardware Target: [${activeScannedAsset.assetTag}] ${activeScannedAsset.model} (${activeScannedAsset.deviceType})
+Specs: CPU: ${activeScannedAsset.specs.cpu || 'N/A'}, RAM: ${activeScannedAsset.specs.ram || 'N/A'}, Storage: ${activeScannedAsset.specs.storage || 'N/A'}, Motherboard: ${activeScannedAsset.specs.motherboard || 'N/A'}, PSU: ${activeScannedAsset.specs.psu || 'N/A'}
+Recent Repairs: ${activeScannedAsset.repairHistory.map((r) => `${r.date}: ${r.faultReported} -> ${r.diagnosis}`).join('; ')}`
+    : ''
+}
 
 Active Bench Work Orders Currently on Station:
 ${activeProjects
@@ -690,12 +861,19 @@ ${ownerContext ? `\nActive Lab Master Context:\n${ownerContext}\n*Notice: You ha
   };
 
   const sendDiagnosticToGemini = (solutionNode: any, categoryName: string, path: string[]) => {
-    const summaryPrompt = `I just completed a diagnostic session in the "${categoryName}" wizard.
+    let summaryPrompt = `I just completed a diagnostic session in the "${categoryName}" wizard.
 Path taken: ${path.join(' ➔ ')}
 Preliminary Result: "${solutionNode.title || 'Hardware Fault'}"
-Probable Root Cause: "${solutionNode.probableRootCause || 'Unspecified'}"
+Probable Root Cause: "${solutionNode.probableRootCause || 'Unspecified'}"`;
 
-Could you evaluate this diagnosis, provide an advanced second opinion, detail specific multimeter test points / resistance values, and explain any potential gotchas or edge-case motherboard quirks related to this fault?`;
+    if (activeScannedAsset) {
+      summaryPrompt += `\n\nTarget Hardware Asset Tag: [${activeScannedAsset.assetTag}] ${activeScannedAsset.model} (${activeScannedAsset.deviceType})
+Assigned Bench: ${activeScannedAsset.assignedBench} | Serial: ${activeScannedAsset.serialNumber}
+Specifications: CPU: ${activeScannedAsset.specs.cpu || 'N/A'}, RAM: ${activeScannedAsset.specs.ram || 'N/A'}, Motherboard: ${activeScannedAsset.specs.motherboard || 'N/A'}, PSU: ${activeScannedAsset.specs.psu || 'N/A'}
+Previous Repairs: ${activeScannedAsset.repairHistory.map((r) => `[${r.date}] ${r.faultReported} -> ${r.diagnosis}`).join('; ') || 'No prior repairs logged'}`;
+    }
+
+    summaryPrompt += `\n\nCould you evaluate this diagnosis, provide an advanced second opinion, detail specific multimeter test points / resistance values, and explain any potential gotchas or edge-case motherboard quirks related to this fault?`;
 
     setActiveTab('gemini');
     sendMessageToGemini(summaryPrompt);
@@ -841,6 +1019,16 @@ Could you evaluate this diagnosis, provide an advanced second opinion, detail sp
         deleteProject,
         exportDataJson,
         exportDataTxt,
+
+        hardwareAssets,
+        activeScannedAsset,
+        setActiveScannedAsset,
+        isScannerModalOpen,
+        setIsScannerModalOpen,
+        lookupHardwareAsset,
+        saveHardwareAsset,
+        addAssetRepairLog,
+        deleteHardwareAsset,
 
         toasts,
         addToast,

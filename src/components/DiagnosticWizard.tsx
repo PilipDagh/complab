@@ -16,6 +16,12 @@ import {
   ShieldAlert,
   ArrowRight,
   BookOpen,
+  QrCode,
+  Tag,
+  Cpu,
+  History,
+  X,
+  ExternalLink,
 } from 'lucide-react';
 
 export const DiagnosticWizard: React.FC = () => {
@@ -29,6 +35,9 @@ export const DiagnosticWizard: React.FC = () => {
     resetDiagnostic,
     jumpToBreadcrumb,
     sendDiagnosticToGemini,
+    activeScannedAsset,
+    setActiveScannedAsset,
+    setIsScannerModalOpen,
   } = useApp();
 
   const currentCategory = categories.find((c) => c.id === activeCategoryId) || categories[0];
@@ -77,13 +86,22 @@ export const DiagnosticWizard: React.FC = () => {
               Select a failure domain below to start a CompTIA A+ compliant branching decision tree.
             </p>
           </div>
-          <button
-            onClick={() => resetDiagnostic()}
-            className="self-start md:self-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-gray-300 hover:text-white text-xs font-mono transition-colors border border-[#30363d]"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-gray-400" />
-            <span>Reset Tree</span>
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setIsScannerModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-mono font-bold shadow-md shadow-cyan-950/30 transition-all border border-cyan-400/30"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span>Scan Asset Tag (QR)</span>
+            </button>
+            <button
+              onClick={() => resetDiagnostic()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-gray-300 hover:text-white text-xs font-mono transition-colors border border-[#30363d]"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-gray-400" />
+              <span>Reset Tree</span>
+            </button>
+          </div>
         </div>
 
         {/* Categories Bar */}
@@ -131,6 +149,50 @@ export const DiagnosticWizard: React.FC = () => {
           })}
         </div>
       </div>
+
+      {/* Active Hardware Target Banner if scanned */}
+      {activeScannedAsset && (
+        <div className="p-3.5 rounded-2xl bg-gradient-to-r from-[#0d1726] to-[#111e33] border border-cyan-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-cyan-950/20 animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+              <Tag className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-bold text-white">
+                  Target Asset: <span className="text-cyan-400">{activeScannedAsset.assetTag}</span>
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.2 rounded-full bg-[#1f2937] text-gray-300 border border-[#374151]">
+                  {activeScannedAsset.model}
+                </span>
+                <span className="text-[10px] font-mono text-emerald-400">
+                  [{activeScannedAsset.status}]
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-400 font-mono mt-0.5">
+                Bench: {activeScannedAsset.assignedBench} • CPU: {activeScannedAsset.specs.cpu || 'N/A'} • RAM: {activeScannedAsset.specs.ram || 'N/A'} • Past Repairs: {activeScannedAsset.repairHistory.length}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <button
+              onClick={() => setIsScannerModalOpen(true)}
+              className="px-2.5 py-1 rounded-lg bg-[#1f2937] hover:bg-[#374151] border border-[#374151] text-xs font-mono text-cyan-300 flex items-center gap-1 transition-colors"
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>Specs & History</span>
+            </button>
+            <button
+              onClick={() => setActiveScannedAsset(null)}
+              className="p-1 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors"
+              title="Unlink Asset from session"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Breadcrumb Path Bar */}
       <div className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#161b22] border border-[#30363d] overflow-x-auto scrollbar-none text-xs font-mono">

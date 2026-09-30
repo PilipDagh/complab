@@ -126,3 +126,45 @@ export interface ComponentPowerSpec {
   name: string;
   baseTdp: number;
 }
+
+export interface AssetRepairLog {
+  id: string;
+  date: string;
+  technician: string;
+  faultReported: string;
+  diagnosis: string;
+  actionsTaken: string;
+  partsReplaced: string[];
+  cost?: number;
+  status: 'Resolved' | 'Parts Ordered' | 'Bench Testing' | 'Under Inspection';
+}
+
+export interface HardwareAsset {
+  id: string; // Document ID (usually assetTag, e.g., "AST-DELL-7090")
+  assetTag: string; // e.g. "AST-DELL-7090"
+  serialNumber: string;
+  model: string;
+  deviceType: 'Desktop Tower' | 'Laptop' | 'Managed Switch' | 'Server' | 'Power Supply' | 'Bench Equipment' | 'Custom Rig';
+  assignedBench: string;
+  department: string;
+  status: 'In Service' | 'Under Repair' | 'Decommissioned' | 'Bench Testing' | 'Spare Inventory';
+  specs: {
+    cpu?: string;
+    ram?: string;
+    storage?: string;
+    gpu?: string;
+    motherboard?: string;
+    psu?: string;
+    os?: string;
+    macAddress?: string;
+    ipAddress?: string;
+    firmwareVersion?: string;
+  };
+  purchaseDate?: string;
+  warrantyExpiry?: string;
+  notes?: string;
+  repairHistory: AssetRepairLog[];
+  createdAt: string;
+  updatedAt: string;
+  authorUid?: string;
+}
