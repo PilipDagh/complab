@@ -11,45 +11,35 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isUserSelf(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
     // Users Collection
     match /users/{userId} {
-      // Allow reading user profiles if signed in or guest viewing lab benches
-      allow read: if true;
-      // Allow user to create or update their own profile document
-      allow create: if isUserSelf(userId) && request.resource.data.uid == userId;
-      allow update: if isUserSelf(userId);
-      allow delete: if false;
+      allow read, write: if true;
     }
 
     // Daily Calendar Logs Collection
     match /calendar_logs/{logId} {
-      allow read: if true;
-      allow create, update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow read, write: if true;
     }
 
     // Projects / Work Orders Collection
     match /projects/{projectId} {
-      allow read: if true;
-      allow create, update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow read, write: if true;
     }
 
     // Hardware Assets Collection (Scannable QR asset tags & specs)
     match /hardware_assets/{assetId} {
-      allow read: if true;
-      allow create, update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow read, write: if true;
     }
 
     // System Metadata
     match /system/{docId} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow read, write: if true;
+    }
+
+    // Connection test document
+    match /test/{docId} {
+      allow read, write: if true;
     }
   }
 }
+

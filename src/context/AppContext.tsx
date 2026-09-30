@@ -203,11 +203,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (fsLogs && fsLogs.length > 0) {
           setCalendarLogs(fsLogs);
         } else {
-          // Seed initial demo logs to Firestore so database has initial content
-          for (const initLog of INITIAL_CALENDAR_LOGS) {
-            await saveCalendarLogToFirestore(initLog);
-          }
           setCalendarLogs(INITIAL_CALENDAR_LOGS);
+          // Seed initial demo logs to Firestore asynchronously
+          for (const initLog of INITIAL_CALENDAR_LOGS) {
+            try {
+              await saveCalendarLogToFirestore(initLog);
+            } catch (seedErr) {
+              console.warn('Initial calendar log seed fallback:', seedErr);
+            }
+          }
         }
 
         // Fetch Projects / Work Orders from Firestore
@@ -215,11 +219,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (fsProjects && fsProjects.length > 0) {
           setProjects(fsProjects);
         } else {
-          // Seed initial projects to Firestore
-          for (const initProj of INITIAL_PROJECT_WORK_ORDERS) {
-            await saveProjectToFirestore(initProj);
-          }
           setProjects(INITIAL_PROJECT_WORK_ORDERS);
+          // Seed initial projects to Firestore asynchronously
+          for (const initProj of INITIAL_PROJECT_WORK_ORDERS) {
+            try {
+              await saveProjectToFirestore(initProj);
+            } catch (seedErr) {
+              console.warn('Initial project seed fallback:', seedErr);
+            }
+          }
         }
 
         // Fetch Hardware Assets from Firestore
@@ -227,11 +235,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (fsAssets && fsAssets.length > 0) {
           setHardwareAssets(fsAssets);
         } else {
-          // Seed initial hardware assets to Firestore
-          for (const initAsset of INITIAL_HARDWARE_ASSETS) {
-            await saveHardwareAssetToFirestore(initAsset);
-          }
           setHardwareAssets(INITIAL_HARDWARE_ASSETS);
+          // Seed initial hardware assets to Firestore asynchronously
+          for (const initAsset of INITIAL_HARDWARE_ASSETS) {
+            try {
+              await saveHardwareAssetToFirestore(initAsset);
+            } catch (seedErr) {
+              console.warn('Initial asset seed fallback:', seedErr);
+            }
+          }
         }
       } catch (err) {
         console.warn('Firestore initial data load notice (using memory defaults):', err);
