@@ -131,6 +131,8 @@ export const LabCalendar: React.FC = () => {
   // If NOT OWNER, display friendly lock screen
   if (!isOwner) {
     const ownerUser = users.find((u) => u.role === 'ROLE_OWNER');
+    const isGuest = currentUser === null;
+
     return (
       <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-8 lg:p-12 shadow-2xl text-center max-w-2xl mx-auto my-8 space-y-6">
         <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto shadow-inner">
@@ -139,14 +141,15 @@ export const LabCalendar: React.FC = () => {
 
         <div className="space-y-2">
           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 uppercase font-semibold">
-            Instructor / Lead Tech Credential Required
+            {isGuest ? 'Guest Session - Authentication Required' : 'Instructor / Lead Tech Credential Required'}
           </span>
           <h2 className="text-xl lg:text-2xl font-bold text-white font-mono">
             Class Lab Calendar & Master Projects Locked
           </h2>
           <p className="text-xs text-gray-400 leading-relaxed max-w-md mx-auto">
-            You are currently logged in with <span className="text-[#38bdf8] font-mono">ROLE_STUDENT</span>.
-            The Class Activity Logger, Work Order Kanban, and AI Memory Context Injector are exclusively accessible by the Lead Bench Instructor / Shop Owner.
+            {isGuest
+              ? 'You are currently browsing as a Guest Technician. Log in with Firebase Authentication to sync with Firestore and access the master work orders board.'
+              : 'You are currently logged in with ROLE_STUDENT. The Class Activity Logger, Work Order Kanban, and AI Memory Context Injector are exclusively accessible by the Lead Bench Instructor / Shop Owner in Firestore.'}
           </p>
         </div>
 
@@ -156,25 +159,26 @@ export const LabCalendar: React.FC = () => {
             <span>How to access this feature:</span>
           </div>
           <p className="text-gray-300">
-            Per the system specification, the <span className="text-white font-bold">first account ever registered</span> is automatically granted Owner privileges. You can switch to the designated Owner account below:
+            Per the system specification, the <span className="text-white font-bold">first account ever registered in Firestore</span> is permanently flagged with <span className="text-[#38bdf8] font-mono">ROLE_OWNER</span> privileges.
           </p>
+
+          <button
+            onClick={() => setIsAuthModalOpen(true)}
+            className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#238636] to-[#2ea043] text-white text-xs font-mono font-bold transition-all shadow-md flex items-center justify-center gap-2 hover:scale-[1.01]"
+          >
+            <UserCheck className="w-4 h-4" />
+            <span>{isGuest ? 'Log In / Create Account' : 'Switch or Elevate Account'}</span>
+          </button>
 
           {ownerUser && (
             <button
               onClick={() => switchUserQuick(ownerUser.id)}
-              className="w-full py-2.5 px-4 rounded-xl bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-xs font-mono text-gray-200 hover:text-white transition-colors flex items-center justify-between"
+              className="w-full py-2 px-3 rounded-xl bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-xs font-mono text-gray-300 hover:text-white transition-colors flex items-center justify-between"
             >
-              <span>Switch to Lead Instructor: {ownerUser.displayName}</span>
-              <span className="text-[#2ea043] font-bold">Quick Switch ➔</span>
+              <span>Quick-test as Lead Instructor: {ownerUser.displayName}</span>
+              <span className="text-[#2ea043] font-bold">Switch ➔</span>
             </button>
           )}
-
-          <button
-            onClick={() => setIsAuthModalOpen(true)}
-            className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#238636] to-[#2ea043] text-white text-xs font-mono font-bold transition-all shadow-md"
-          >
-            Authenticate with Another Account
-          </button>
         </div>
       </div>
     );

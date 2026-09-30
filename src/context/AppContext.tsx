@@ -13,6 +13,25 @@ import {
   INITIAL_CALENDAR_LOGS,
   INITIAL_PROJECT_WORK_ORDERS,
 } from '../data/seedData';
+import { auth, googleAuthProvider } from '../lib/firebase.ts';
+import {
+  signInWithPopup,
+  signOut as fbSignOut,
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
+} from 'firebase/auth';
+import {
+  syncUserInFirestore,
+  fetchUsersFromFirestore,
+  fetchCalendarLogsFromFirestore,
+  saveCalendarLogToFirestore,
+  fetchProjectsFromFirestore,
+  saveProjectToFirestore,
+  updateProjectInFirestore,
+  deleteProjectFromFirestore,
+} from '../lib/firestoreService.ts';
 
 export type AppTab = 'diagnostic' | 'reference' | 'gemini' | 'calendar';
 
@@ -32,12 +51,15 @@ interface AppContextType {
   currentUser: User | null;
   users: User[];
   isOwner: boolean;
-  loginUser: (username: string, password?: string) => { success: boolean; message: string };
-  signupUser: (username: string, password?: string, displayName?: string) => { success: boolean; message: string };
+  isGuest: boolean;
+  loginUser: (usernameOrEmail: string, password?: string) => Promise<{ success: boolean; message: string }>;
+  signupUser: (usernameOrEmail: string, password?: string, displayName?: string) => Promise<{ success: boolean; message: string }>;
+  signInWithGoogle: () => Promise<void>;
   logoutUser: () => void;
   switchUserQuick: (userId: string) => void;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
+  isAuthLoading: boolean;
 
   // Diagnostics
   categories: DiagnosticCategory[];
@@ -64,15 +86,15 @@ interface AppContextType {
 
   // Lab Calendar & Work Orders
   calendarLogs: DailyActivityLog[];
-  saveCalendarLog: (log: Partial<DailyActivityLog> & { dateString: string }) => void;
+  saveCalendarLog: (log: Partial<DailyActivityLog> & { dateString: string }) => Promise<void>;
   selectedDate: string;
   setSelectedDate: (date: string) => void;
 
   projects: ProjectWorkOrder[];
-  addProject: (project: Omit<ProjectWorkOrder, 'id' | 'dateCreated' | 'status'>) => void;
-  updateProject: (id: string, updates: Partial<ProjectWorkOrder>) => void;
-  archiveProject: (id: string, outcomeNotes: string) => void;
-  deleteProject: (id: string) => void;
+  addProject: (project: Omit<ProjectWorkOrder, 'id' | 'dateCreated' | 'status'>) => Promise<void>;
+  updateProject: (id: string, updates: Partial<ProjectWorkOrder>) => Promise<void>;
+  archiveProject: (id: string, outcomeNotes: string) => Promise<void>;
+  deleteProject: (id: string) => Promise<void>;
   exportDataJson: () => void;
   exportDataTxt: () => string;
 
@@ -84,67 +106,15 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const STORAGE_KEYS = {
-  USERS: 'tradetech_users_v1',
-  CURRENT_USER: 'tradetech_curr_user_v1',
-  CALENDAR: 'tradetech_calendar_v1',
-  PROJECTS: 'tradetech_projects_v1',
-  CHAT: 'tradetech_chat_v1',
-};
-
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Navigation
   const [activeTab, setActiveTab] = useState<AppTab>('diagnostic');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
 
-  // Users & Auth
-  const [users, setUsers] = useState<User[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEYS.USERS);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.error('Error loading users from storage:', e);
-    }
-    return INITIAL_USERS;
-  });
-
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-      if (stored) {
-        return JSON.parse(stored);
-      }
-    } catch (e) {
-      console.error('Error loading current user:', e);
-    }
-    // Default to the first owner user for instant exploration
-    return INITIAL_USERS[0] || null;
-  });
-
-  // Sync users to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-    } catch (e) {
-      console.error('Error saving users to storage:', e);
-    }
-  }, [users]);
-
-  // Sync currentUser to localStorage
-  useEffect(() => {
-    try {
-      if (currentUser) {
-        localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(currentUser));
-      } else {
-        localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
-      }
-    } catch (e) {
-      console.error('Error saving current user:', e);
-    }
-  }, [currentUser]);
+  // Standard Web User Login: GUEST by default unless previously logged in via Chrome/Browser session!
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
 
   // Toast System
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -161,38 +131,137 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // Auth Operations
-  const isOwner = currentUser?.role === 'ROLE_OWNER';
-
-  const loginUser = (username: string, password?: string) => {
-    const trimmed = username.trim().toLowerCase();
-    if (!trimmed) {
-      addToast({ type: 'error', title: 'Login Failed', message: 'Please enter a valid username.' });
-      return { success: false, message: 'Username cannot be blank.' };
-    }
-
-    const found = users.find((u) => u.username.toLowerCase() === trimmed);
-    if (!found) {
-      addToast({
-        type: 'error',
-        title: 'Account Not Found',
-        message: `No technician account found matching "${username}". Click "Need an account?" below to sign up.`,
-      });
-      return { success: false, message: 'User not found in registry.' };
-    }
-
-    setCurrentUser(found);
-    setIsAuthModalOpen(false);
-    addToast({
-      type: 'success',
-      title: 'Authenticated Successfully',
-      message: `Welcome back, ${found.displayName}! Logged in as ${found.role === 'ROLE_OWNER' ? 'Instructor / Lead Tech (Owner)' : 'Bench Tech (Student)'}.`,
-    });
-    return { success: true, message: 'Login successful' };
+  // Helper to format usernames into standard email addresses for Firebase Auth
+  const formatEmail = (input: string): string => {
+    const trimmed = input.trim().toLowerCase();
+    if (trimmed.includes('@')) return trimmed;
+    // Format local usernames (e.g. 'tech_alex') into email format
+    return `${trimmed.replace(/[^a-z0-9._-]/g, '')}@tradetech.edu`;
   };
 
-  const signupUser = (username: string, password = '', displayName = '') => {
-    const trimmed = username.trim().toLowerCase();
+  // 1. Firebase Auth state listener: Restores previous session automatically like a normal website
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        try {
+          const syncedUser = await syncUserInFirestore(
+            fbUser.uid,
+            fbUser.email || `${fbUser.uid}@tradetech.edu`,
+            fbUser.displayName || undefined
+          );
+          setCurrentUser(syncedUser);
+        } catch (err) {
+          console.error('Failed to sync authenticated user with Firestore:', err);
+        }
+      } else {
+        // User is not logged in: Guest user by default
+        setCurrentUser(null);
+      }
+      setIsAuthLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Load Firestore Data (Users, Calendar Logs, Projects) on boot
+  useEffect(() => {
+    const loadFirestoreData = async () => {
+      try {
+        // Fetch Users from Firestore
+        const fsUsers = await fetchUsersFromFirestore();
+        if (fsUsers && fsUsers.length > 0) {
+          setUsers(fsUsers);
+        }
+
+        // Fetch Daily Calendar Logs from Firestore
+        const fsLogs = await fetchCalendarLogsFromFirestore();
+        if (fsLogs && fsLogs.length > 0) {
+          setCalendarLogs(fsLogs);
+        } else {
+          // Seed initial demo logs to Firestore so database has initial content
+          for (const initLog of INITIAL_CALENDAR_LOGS) {
+            await saveCalendarLogToFirestore(initLog);
+          }
+          setCalendarLogs(INITIAL_CALENDAR_LOGS);
+        }
+
+        // Fetch Projects / Work Orders from Firestore
+        const fsProjects = await fetchProjectsFromFirestore();
+        if (fsProjects && fsProjects.length > 0) {
+          setProjects(fsProjects);
+        } else {
+          // Seed initial projects to Firestore
+          for (const initProj of INITIAL_PROJECT_WORK_ORDERS) {
+            await saveProjectToFirestore(initProj);
+          }
+          setProjects(INITIAL_PROJECT_WORK_ORDERS);
+        }
+      } catch (err) {
+        console.warn('Firestore initial data load notice (using memory defaults):', err);
+      }
+    };
+
+    loadFirestoreData();
+  }, []);
+
+  // Auth Operations
+  const isOwner = currentUser?.role === 'ROLE_OWNER';
+  const isGuest = currentUser === null;
+
+  const loginUser = async (usernameOrEmail: string, password = ''): Promise<{ success: boolean; message: string }> => {
+    if (!usernameOrEmail.trim()) {
+      addToast({ type: 'error', title: 'Login Failed', message: 'Username or email cannot be blank.' });
+      return { success: false, message: 'Username required.' };
+    }
+
+    try {
+      const emailToUse = formatEmail(usernameOrEmail);
+      const userCredential = await signInWithEmailAndPassword(auth, emailToUse, password);
+
+      // Sync and retrieve user record from Firestore
+      const user = await syncUserInFirestore(
+        userCredential.user.uid,
+        userCredential.user.email || emailToUse,
+        userCredential.user.displayName || usernameOrEmail.split('@')[0]
+      );
+
+      setCurrentUser(user);
+      setIsAuthModalOpen(false);
+
+      addToast({
+        type: 'success',
+        title: 'Logged In Successfully',
+        message: `Welcome back, ${user.displayName}! Logged in as ${user.role === 'ROLE_OWNER' ? 'Instructor / Owner' : 'Bench Tech'}.`,
+      });
+
+      return { success: true, message: 'Login successful' };
+    } catch (error: any) {
+      console.error('Firebase Login Error:', error);
+      let errorMsg = 'Failed to authenticate.';
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        errorMsg = 'Incorrect username, email, or password. If you need an account, click "Sign up here".';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMsg = 'Invalid email address format.';
+      } else {
+        errorMsg = error.message || 'Authentication error.';
+      }
+
+      addToast({
+        type: 'error',
+        title: 'Authentication Failed',
+        message: errorMsg,
+      });
+
+      return { success: false, message: errorMsg };
+    }
+  };
+
+  const signupUser = async (
+    usernameOrEmail: string,
+    password = '',
+    displayName = ''
+  ): Promise<{ success: boolean; message: string }> => {
+    const trimmed = usernameOrEmail.trim().toLowerCase();
     if (!trimmed) {
       addToast({ type: 'error', title: 'Sign Up Failed', message: 'Username is required.' });
       return { success: false, message: 'Username required.' };
@@ -207,51 +276,90 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, message: 'Password must be at least 6 characters.' };
     }
 
-    const existing = users.find((u) => u.username.toLowerCase() === trimmed);
-    if (existing) {
+    try {
+      const emailToUse = formatEmail(trimmed);
+      const userCredential = await createUserWithEmailAndPassword(auth, emailToUse, password);
+
+      const resolvedName = displayName.trim() || trimmed.split('@')[0];
+      await updateProfile(userCredential.user, { displayName: resolvedName });
+
+      // First User rule enforced inside Firestore syncUserInFirestore:
+      const newUser = await syncUserInFirestore(userCredential.user.uid, emailToUse, resolvedName);
+
+      setCurrentUser(newUser);
+      setUsers((prev) => [...prev, newUser]);
+      setIsAuthModalOpen(false);
+
+      addToast({
+        type: 'success',
+        title: 'Account Registered & Synced to Firestore',
+        message: newUser.role === 'ROLE_OWNER'
+          ? `First User Flagged: You have been granted permanent ROLE_OWNER (Instructor/Lead Tech)!`
+          : `Technician account created in Firestore with ROLE_STUDENT permissions. Welcome!`,
+      });
+
+      return { success: true, message: 'Account created successfully.' };
+    } catch (error: any) {
+      console.error('Firebase Signup Error:', error);
+      let errorMsg = 'Failed to register account.';
+      if (error.code === 'auth/email-already-in-use') {
+        errorMsg = `The technician account "${usernameOrEmail}" is already registered. Please log in instead.`;
+      } else if (error.code === 'auth/weak-password') {
+        errorMsg = 'Password must be at least 6 characters.';
+      } else {
+        errorMsg = error.message || 'Registration failed.';
+      }
+
       addToast({
         type: 'error',
-        title: 'Username Taken',
-        message: `The username "${username}" is already assigned to a bench technician.`,
+        title: 'Registration Error',
+        message: errorMsg,
       });
-      return { success: false, message: 'Username is already taken.' };
+
+      return { success: false, message: errorMsg };
     }
+  };
 
-    // Automatic Owner Elevation Rule:
-    // If there are zero accounts in registry, or this is the very first account, grant ROLE_OWNER.
-    const isFirstAccount = users.length === 0;
-    const assignedRole = isFirstAccount ? 'ROLE_OWNER' : 'ROLE_STUDENT';
+  const signInWithGoogle = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleAuthProvider);
+      const email = result.user.email || `${result.user.uid}@tradetech.edu`;
+      const name = result.user.displayName || email.split('@')[0];
 
-    const newUser: User = {
-      id: 'user_' + Date.now(),
-      username: trimmed,
-      displayName: displayName.trim() || username,
-      role: assignedRole,
-      createdAt: new Date().toISOString(),
-      benchStation: isFirstAccount ? 'Instructor Master Station #1' : `Student Station #${users.length + 1}`,
-    };
+      // Sync and flag First User in Firestore
+      const user = await syncUserInFirestore(result.user.uid, email, name);
 
-    setUsers((prev) => [...prev, newUser]);
-    setCurrentUser(newUser);
-    setIsAuthModalOpen(false);
+      setCurrentUser(user);
+      setUsers((prev) => {
+        if (!prev.find((u) => u.id === user.id)) {
+          return [...prev, user];
+        }
+        return prev.map((u) => (u.id === user.id ? user : u));
+      });
+      setIsAuthModalOpen(false);
 
-    addToast({
-      type: 'success',
-      title: 'Account Registered',
-      message: isFirstAccount
-        ? `First Registered User Elevation: You have been granted ROLE_OWNER (Instructor/Lead Tech)!`
-        : `Technician account created with ROLE_STUDENT permissions. Welcome to the lab!`,
-    });
-
-    return { success: true, message: 'Account created successfully.' };
+      addToast({
+        type: 'success',
+        title: 'Google & Firestore Authenticated',
+        message: `Welcome, ${user.displayName}! Logged in as ${user.role === 'ROLE_OWNER' ? 'Instructor / Lead Tech (Owner)' : 'Bench Tech'}.`,
+      });
+    } catch (err: any) {
+      console.error('Google Sign-In Error:', err);
+      addToast({
+        type: 'error',
+        title: 'Authentication Failed',
+        message: err.message || 'Failed to authenticate via Google.',
+      });
+    }
   };
 
   const logoutUser = () => {
+    fbSignOut(auth).catch(() => {});
     setCurrentUser(null);
     addToast({
       type: 'info',
       title: 'Logged Out',
-      message: 'You have logged out of TradeTech Bench Assistant.',
+      message: 'You are now browsing as a Guest Technician. Log in anytime to restore owner or student roles.',
     });
   };
 
@@ -272,8 +380,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeCategoryId, setActiveCategoryId] = useState<string>('power_post');
   const [currentNodeId, setCurrentNodeId] = useState<string>('node_pwr_start');
   const [diagnosticHistory, setDiagnosticHistory] = useState<string[]>(['node_pwr_start']);
-
-  const activeCategory = categories.find((c) => c.id === activeCategoryId) || categories[0];
 
   const selectDiagnosticOption = (nextNodeId: string) => {
     setCurrentNodeId(nextNodeId);
@@ -296,136 +402,131 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Lab Calendar & Projects
-  const [calendarLogs, setCalendarLogs] = useState<DailyActivityLog[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEYS.CALENDAR);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.error('Error loading calendar:', e);
-    }
-    return INITIAL_CALENDAR_LOGS;
-  });
-
-  const [projects, setProjects] = useState<ProjectWorkOrder[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEYS.PROJECTS);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.error('Error loading projects:', e);
-    }
-    return INITIAL_PROJECT_WORK_ORDERS;
-  });
+  // Lab Calendar & Projects (PERSISTED IN FIRESTORE)
+  const [calendarLogs, setCalendarLogs] = useState<DailyActivityLog[]>(INITIAL_CALENDAR_LOGS);
+  const [projects, setProjects] = useState<ProjectWorkOrder[]>(INITIAL_PROJECT_WORK_ORDERS);
 
   const todayStr = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.CALENDAR, JSON.stringify(calendarLogs));
-    } catch (e) {
-      console.error('Error saving calendar:', e);
-    }
-  }, [calendarLogs]);
+  const saveCalendarLog = async (logData: Partial<DailyActivityLog> & { dateString: string }) => {
+    const idx = calendarLogs.findIndex((item) => item.dateString === logData.dateString);
+    const newEntry: DailyActivityLog = {
+      id: idx >= 0 ? calendarLogs[idx].id : 'log_' + Date.now(),
+      dateString: logData.dateString,
+      status: logData.status || 'in_progress',
+      topicsCovered: logData.topicsCovered || '',
+      benchRepairsPerformed: logData.benchRepairsPerformed || '',
+      partsUsedOrOrdered: logData.partsUsedOrOrdered || '',
+      specialNotesAndSafety: logData.specialNotesAndSafety || '',
+      updatedAt: new Date().toISOString(),
+    };
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
-    } catch (e) {
-      console.error('Error saving projects:', e);
-    }
-  }, [projects]);
-
-  const saveCalendarLog = (logData: Partial<DailyActivityLog> & { dateString: string }) => {
+    // Update local state
     setCalendarLogs((prev) => {
-      const idx = prev.findIndex((item) => item.dateString === logData.dateString);
-      const newEntry: DailyActivityLog = {
-        id: idx >= 0 ? prev[idx].id : 'log_' + Date.now(),
-        dateString: logData.dateString,
-        status: logData.status || 'in_progress',
-        topicsCovered: logData.topicsCovered || '',
-        benchRepairsPerformed: logData.benchRepairsPerformed || '',
-        partsUsedOrOrdered: logData.partsUsedOrOrdered || '',
-        specialNotesAndSafety: logData.specialNotesAndSafety || '',
-        updatedAt: new Date().toISOString(),
-      };
-
-      if (idx >= 0) {
+      const existingIdx = prev.findIndex((item) => item.dateString === logData.dateString);
+      if (existingIdx >= 0) {
         const updated = [...prev];
-        updated[idx] = newEntry;
+        updated[existingIdx] = newEntry;
         return updated;
       } else {
         return [...prev, newEntry];
       }
     });
 
-    addToast({
-      type: 'success',
-      title: 'Lab Activity Saved',
-      message: `Activity log updated for date: ${logData.dateString}. Synchronized with AI context.`,
-    });
+    // Persist in Firestore
+    try {
+      await saveCalendarLogToFirestore(newEntry);
+      addToast({
+        type: 'success',
+        title: 'Saved to Firestore',
+        message: `Activity log for ${logData.dateString} saved in Firestore cloud database.`,
+      });
+    } catch (e) {
+      console.error('Firestore saveCalendarLog error:', e);
+    }
   };
 
-  const addProject = (p: Omit<ProjectWorkOrder, 'id' | 'dateCreated' | 'status'>) => {
+  const addProject = async (p: Omit<ProjectWorkOrder, 'id' | 'dateCreated' | 'status'>) => {
     const newProject: ProjectWorkOrder = {
       ...p,
       id: 'wo_' + Date.now().toString().substring(6),
       dateCreated: new Date().toISOString().split('T')[0],
       status: 'ongoing',
     };
+
     setProjects((prev) => [newProject, ...prev]);
-    addToast({
-      type: 'success',
-      title: 'Work Order Created',
-      message: `Added: ${newProject.title} to Bench ${newProject.benchNumber}`,
-    });
+
+    // Persist in Firestore
+    try {
+      await saveProjectToFirestore(newProject);
+      addToast({
+        type: 'success',
+        title: 'Work Order Saved to Firestore',
+        message: `Added: ${newProject.title} to Bench ${newProject.benchNumber}`,
+      });
+    } catch (e) {
+      console.error('Firestore addProject error:', e);
+    }
   };
 
-  const updateProject = (id: string, updates: Partial<ProjectWorkOrder>) => {
+  const updateProject = async (id: string, updates: Partial<ProjectWorkOrder>) => {
     setProjects((prev) =>
       prev.map((proj) => (proj.id === id ? { ...proj, ...updates } : proj))
     );
-    addToast({
-      type: 'info',
-      title: 'Work Order Updated',
-      message: 'Project status and bench notes have been updated.',
-    });
+
+    // Persist in Firestore
+    try {
+      await updateProjectInFirestore(id, updates);
+      addToast({
+        type: 'info',
+        title: 'Firestore Updated',
+        message: 'Work order updated in cloud database.',
+      });
+    } catch (e) {
+      console.error('Firestore updateProject error:', e);
+    }
   };
 
-  const archiveProject = (id: string, outcomeNotes: string) => {
+  const archiveProject = async (id: string, outcomeNotes: string) => {
+    const updates = {
+      status: 'archived' as const,
+      stage: 'Completed' as const,
+      dateCompleted: new Date().toISOString().split('T')[0],
+      repairOutcomeNotes: outcomeNotes,
+    };
+
     setProjects((prev) =>
-      prev.map((proj) =>
-        proj.id === id
-          ? {
-              ...proj,
-              status: 'archived',
-              stage: 'Completed',
-              dateCompleted: new Date().toISOString().split('T')[0],
-              repairOutcomeNotes: outcomeNotes,
-            }
-          : proj
-      )
+      prev.map((proj) => (proj.id === id ? { ...proj, ...updates } : proj))
     );
-    addToast({
-      type: 'success',
-      title: 'Project Archived',
-      message: 'Repair successfully moved to Completed Bench History.',
-    });
+
+    // Persist in Firestore
+    try {
+      await updateProjectInFirestore(id, updates);
+      addToast({
+        type: 'success',
+        title: 'Archived to Firestore',
+        message: 'Repair moved to Completed History in Firestore.',
+      });
+    } catch (e) {
+      console.error('Firestore archiveProject error:', e);
+    }
   };
 
-  const deleteProject = (id: string) => {
+  const deleteProject = async (id: string) => {
     setProjects((prev) => prev.filter((p) => p.id !== id));
-    addToast({
-      type: 'warning',
-      title: 'Work Order Removed',
-      message: 'Work order was deleted from the bench board.',
-    });
+
+    // Delete in Firestore
+    try {
+      await deleteProjectFromFirestore(id);
+      addToast({
+        type: 'warning',
+        title: 'Removed from Firestore',
+        message: 'Work order was deleted from cloud database.',
+      });
+    } catch (e) {
+      console.error('Firestore deleteProject error:', e);
+    }
   };
 
   // Helper to compile owner context
@@ -467,46 +568,27 @@ ${pastProjects
   };
 
   // Gemini AI Chat State
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEYS.CHAT);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.error('Error loading chat:', e);
-    }
-    return [
-      {
-        id: 'msg_welcome',
-        role: 'assistant',
-        content:
-          "👋 **Welcome to TradeTech Bench Assistant!** I am your CompTIA A+ & Cisco certified repair co-pilot.\n\n" +
-          "You can ask me anything about:\n" +
-          "- Motherboard POST failure isolation and Multimeter voltage tests\n" +
-          "- PSU pinout readings (+3.3V, +5V, +12V, -12V, +5VSB, PS_ON#)\n" +
-          "- Network APIPA (169.254.x.x) resolution, DNS flush, and switch VLANs\n" +
-          "- Step-by-step disassembly, BGA rework, and thermal paste application\n\n" +
-          "💡 *Pro-Tip: When logged in as Lead Tech / Owner, I automatically inspect today's ongoing lab work orders to tailor my repair advice to your bench!*",
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      },
-    ];
-  });
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    {
+      id: 'msg_welcome',
+      role: 'assistant',
+      content:
+        "👋 **Welcome to TradeTech Bench Assistant!** I am your CompTIA A+ & Cisco certified repair co-pilot.\n\n" +
+        "You can ask me anything about:\n" +
+        "- Motherboard POST failure isolation and Multimeter voltage tests\n" +
+        "- PSU pinout readings (+3.3V, +5V, +12V, -12V, +5VSB, PS_ON#)\n" +
+        "- Network APIPA (169.254.x.x) resolution, DNS flush, and switch VLANs\n" +
+        "- Step-by-step disassembly, BGA rework, and thermal paste application\n\n" +
+        "💡 *Pro-Tip: When logged in as Lead Tech / Owner, I automatically inspect today's ongoing lab work orders to tailor my repair advice to your bench!*",
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    },
+  ]);
 
   const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
   const [selectedModel, setSelectedModel] = useState<
     'gemini-3.8-flash' | 'gemini-3.1-pro-preview' | 'gemini-3.1-flash-lite'
-  >('gemini-3.8-flash');
+  >('gemini-3.1-flash-lite');
   const [isThinkingMode, setIsThinkingMode] = useState<boolean>(false);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.CHAT, JSON.stringify(chatMessages));
-    } catch (e) {
-      console.error('Error saving chat:', e);
-    }
-  }, [chatMessages]);
 
   const clearChatHistory = () => {
     setChatMessages([
@@ -534,7 +616,6 @@ ${pastProjects
     setIsAiLoading(true);
 
     try {
-      // Build owner context
       const ownerContext = isOwner ? getOwnerContextPayload() : '';
       const baseSystemPrompt = `You are the TradeTech Bench Assistant, an expert Master PC Technician, Cisco CCNA, and CompTIA A+ Vocational Trade School Instructor.
 Your audience includes computer repair technicians, vocational trade students, and shop lead techs.
@@ -549,7 +630,7 @@ ${ownerContext ? `\nActive Lab Master Context:\n${ownerContext}\n*Notice: You ha
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: text,
-          history: chatMessages.slice(-8), // Send recent context turns
+          history: chatMessages.slice(-8),
           systemInstruction: baseSystemPrompt,
           model: selectedModel,
           thinkingMode: isThinkingMode,
@@ -559,7 +640,7 @@ ${ownerContext ? `\nActive Lab Master Context:\n${ownerContext}\n*Notice: You ha
 
       const data = await response.json();
 
-      if (!response.ok) {
+      if (!response.ok && !data.reply) {
         throw new Error(data.error || 'Server returned an error.');
       }
 
@@ -568,17 +649,38 @@ ${ownerContext ? `\nActive Lab Master Context:\n${ownerContext}\n*Notice: You ha
         role: 'assistant',
         content: data.reply || 'No response received from diagnostic assistant.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        modelUsed: selectedModel,
+        modelUsed: data.modelUsed || selectedModel,
         contextInjected: !!ownerContext,
       };
 
       setChatMessages((prev) => [...prev, botReply]);
     } catch (err: any) {
       console.error('Chat error:', err);
+      let cleanError = err.message || 'Unable to connect to Gemini engine.';
+      try {
+        if (cleanError.startsWith('{')) {
+          const parsed = JSON.parse(cleanError);
+          if (parsed?.error?.message) {
+            cleanError = parsed.error.message;
+          }
+        }
+      } catch (e) {
+        // ignore parse errors
+      }
+
+      if (
+        cleanError.includes('503') ||
+        cleanError.includes('UNAVAILABLE') ||
+        cleanError.includes('high demand')
+      ) {
+        cleanError =
+          '⚠️ **High Demand Notice**: The AI model is currently handling elevated cloud traffic. We recommend selecting **gemini-3.1-flash-lite** from the model dropdown in the chat header for immediate, high-throughput assistance.\n\n*In the meantime: For POST issues, reseat single RAM DIMM in Slot A2 and verify ATX Pin 9 +5VSB.*';
+      }
+
       const errorMsg: ChatMessage = {
         id: 'bot_err_' + Date.now(),
         role: 'assistant',
-        content: `⚠️ **Diagnostic Bridge Notice:** ${err.message || 'Unable to connect to Gemini engine.'}\n\n*Bench Fallback Tip: Double check standard ATX Power Good delay and single-channel RAM seating.*`,
+        content: cleanError,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setChatMessages((prev) => [...prev, errorMsg]);
@@ -608,8 +710,8 @@ Could you evaluate this diagnosis, provide an advanced second opinion, detail sp
   const exportDataJson = () => {
     const exportPayload = {
       exportTimestamp: new Date().toISOString(),
-      institution: 'TradeTech Bench Assistant & Diagnostic Lab Suite',
-      leadTechnician: currentUser?.displayName || 'Unauthenticated Session',
+      institution: 'TradeTech Bench Assistant & Diagnostic Lab Suite (Firestore Synced)',
+      leadTechnician: currentUser?.displayName || 'Guest Technician',
       calendarLogs,
       activeProjects: projects.filter((p) => p.status === 'ongoing'),
       archivedProjects: projects.filter((p) => p.status === 'archived'),
@@ -618,7 +720,7 @@ Could you evaluate this diagnosis, provide an advanced second opinion, detail sp
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportPayload, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `TradeTech_Lab_Export_${todayStr}.json`);
+    downloadAnchor.setAttribute('download', `TradeTech_Firestore_Export_${todayStr}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -626,18 +728,18 @@ Could you evaluate this diagnosis, provide an advanced second opinion, detail sp
     addToast({
       type: 'success',
       title: 'Data Exported',
-      message: 'TradeTech database exported as clean JSON.',
+      message: 'TradeTech Firestore records exported as clean JSON.',
     });
   };
 
   const exportDataTxt = (): string => {
     let report = `=======================================================================\n`;
-    report += `TRADETECH BENCH ASSISTANT - VOCATIONAL LAB SUMMARY REPORT\n`;
+    report += `TRADETECH BENCH ASSISTANT - FIRESTORE VOCATIONAL LAB REPORT\n`;
     report += `Generated: ${new Date().toLocaleString()}\n`;
-    report += `Lead Technician / Instructor: ${currentUser?.displayName || 'N/A'} (${currentUser?.role || 'Guest'})\n`;
+    report += `Lead Technician / Instructor: ${currentUser?.displayName || 'Guest'} (${currentUser?.role || 'Guest'})\n`;
     report += `=======================================================================\n\n`;
 
-    report += `--- SECTION 1: ACTIVE BENCH WORK ORDERS ---\n`;
+    report += `--- SECTION 1: ACTIVE BENCH WORK ORDERS (FIRESTORE) ---\n`;
     const ongoing = projects.filter((p) => p.status === 'ongoing');
     if (ongoing.length === 0) {
       report += `No active work orders currently logged.\n`;
@@ -672,11 +774,10 @@ Could you evaluate this diagnosis, provide an advanced second opinion, detail sp
       report += `-----------------------------------------------------------------------\n`;
     });
 
-    // Auto download text file
     const element = document.createElement('a');
     const file = new Blob([report], { type: 'text/plain' });
     element.href = URL.createObjectURL(file);
-    element.download = `TradeTech_Bench_Report_${todayStr}.txt`;
+    element.download = `TradeTech_Firestore_Report_${todayStr}.txt`;
     document.body.appendChild(element);
     element.click();
     element.remove();
@@ -698,12 +799,15 @@ Could you evaluate this diagnosis, provide an advanced second opinion, detail sp
         currentUser,
         users,
         isOwner,
+        isGuest,
         loginUser,
         signupUser,
+        signInWithGoogle,
         logoutUser,
         switchUserQuick,
         isAuthModalOpen,
         setIsAuthModalOpen,
+        isAuthLoading,
 
         categories,
         activeCategoryId,

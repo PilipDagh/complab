@@ -144,9 +144,9 @@ export const GeminiChatbot: React.FC = () => {
             onChange={(e: any) => setSelectedModel(e.target.value)}
             className="px-2.5 py-1.5 rounded-lg bg-[#21262d] border border-[#30363d] text-xs font-mono text-gray-200 focus:outline-none focus:border-[#38bdf8]"
           >
-            <option value="gemini-3.8-flash">gemini-3.8-flash (Fast Bench)</option>
-            <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Deep Schematics)</option>
-            <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Instant Lookup)</option>
+            <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Fast & Reliable - High Availability)</option>
+            <option value="gemini-3.8-flash">gemini-3.8-flash (Standard Bench)</option>
+            <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Deep Schematics / Thinking)</option>
           </select>
 
           {selectedModel === 'gemini-3.1-pro-preview' && (
@@ -240,6 +240,22 @@ export const GeminiChatbot: React.FC = () => {
                 <div className="space-y-2 whitespace-pre-wrap leading-relaxed">
                   {msg.content}
                 </div>
+
+                {/* Quick Switch Button if demand spike is reported */}
+                {!isUser && msg.content.includes('High Demand') && (
+                  <div className="mt-3 pt-2 border-t border-[#30363d]/60 flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setSelectedModel('gemini-3.1-flash-lite');
+                        sendMessageToGemini('Please analyze the diagnostic query using gemini-3.1-flash-lite.');
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-[#21262d] hover:bg-[#38bdf8]/20 border border-[#38bdf8]/40 text-[#38bdf8] text-xs font-mono font-semibold transition-all flex items-center gap-1.5"
+                    >
+                      <Zap className="w-3.5 h-3.5 text-[#38bdf8]" />
+                      <span>Switch to Flash-Lite & Retry Now</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* Footer metadata & TTS */}
                 <div className="mt-2.5 pt-2 border-t border-[#30363d]/50 flex items-center justify-between text-[10px] font-mono text-gray-400">

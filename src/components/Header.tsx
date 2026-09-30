@@ -75,6 +75,9 @@ export const Header: React.FC = () => {
               <span className="hidden sm:inline-flex text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#161b22] text-[#2ea043] border border-[#2ea043]/30 font-medium">
                 v1.0 COMPTIA
               </span>
+              <span className="hidden lg:inline-flex text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-950/40 text-[#38bdf8] border border-blue-500/30 font-medium">
+                Cloud SQL + Firebase
+              </span>
             </div>
             <div className="flex items-center gap-2 text-[11px] text-gray-400">
               <span className="flex items-center gap-1">

@@ -1,0 +1,86 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Technician profile stored in Firestore",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "description": "Technician email address" },
+        "displayName": { "type": "string", "description": "Technician full name or title" },
+        "role": { "type": "string", "enum": ["ROLE_OWNER", "ROLE_STUDENT"], "description": "Role permissions" },
+        "benchStation": { "type": "string", "description": "Assigned lab bench station" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of account creation" },
+        "isFirstUser": { "type": "boolean", "description": "Whether this user was the first registered account" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "CalendarLog": {
+      "title": "CalendarLog",
+      "description": "Daily vocational lab classroom activity and repair log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Log identifier or date string YYYY-MM-DD" },
+        "dateString": { "type": "string", "description": "Date format YYYY-MM-DD" },
+        "status": { "type": "string", "enum": ["completed", "in_progress", "issue_hold"], "description": "Daily lab status tag" },
+        "topicsCovered": { "type": "string", "description": "Classroom lecture and lab topics" },
+        "benchRepairsPerformed": { "type": "string", "description": "Repairs performed on bench stations" },
+        "partsUsedOrOrdered": { "type": "string", "description": "Component inventory used or ordered" },
+        "specialNotesAndSafety": { "type": "string", "description": "Safety notices and ESD directives" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last update" },
+        "authorUid": { "type": "string", "description": "UID of the instructor or technician who logged it" }
+      },
+      "required": ["dateString", "status"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Bench repair work order",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique work order document ID" },
+        "title": { "type": "string", "description": "Work order summary title" },
+        "benchNumber": { "type": "string", "description": "Bench station e.g. Bench #2" },
+        "technicianName": { "type": "string", "description": "Name of assigned technician" },
+        "clientOrDepartment": { "type": "string", "description": "Client or department unit" },
+        "deviceType": { "type": "string", "description": "Device category e.g. Laptop, Tower, Switch" },
+        "reportedFault": { "type": "string", "description": "Customer reported symptoms" },
+        "priority": { "type": "string", "enum": ["Urgent", "High", "Normal", "Low"], "description": "Work order priority" },
+        "stage": { "type": "string", "enum": ["Intake", "Diagnostics", "Waiting on Parts", "Repair in Progress", "Burn-in Testing", "Completed"], "description": "Current repair stage" },
+        "status": { "type": "string", "enum": ["ongoing", "archived"], "description": "Ongoing work order or archived history" },
+        "repairOutcomeNotes": { "type": "string", "description": "Final diagnostic and repair notes" },
+        "dateCreated": { "type": "string", "description": "Creation date YYYY-MM-DD" },
+        "dateCompleted": { "type": "string", "description": "Completion date YYYY-MM-DD" },
+        "authorUid": { "type": "string", "description": "UID of creator" }
+      },
+      "required": ["title", "benchNumber", "reportedFault", "status"]
+    },
+    "SystemMeta": {
+      "title": "SystemMeta",
+      "description": "System state tracking first user registered",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "description": "UID of the first registered user elevated to ROLE_OWNER" },
+        "initialized": { "type": "boolean", "description": "Whether the system has an owner registered" },
+        "userCount": { "type": "number", "description": "Total registered users" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "#/entities/User",
+      "description": "Technician user profiles with roles"
+    },
+    "/calendar_logs/{logId}": {
+      "schema": "#/entities/CalendarLog",
+      "description": "Daily vocational lab classroom activity, topics, and bench repairs"
+    },
+    "/projects/{projectId}": {
+      "schema": "#/entities/Project",
+      "description": "Active work orders and completed past bench repairs"
+    },
+    "/system/metadata": {
+      "schema": "#/entities/SystemMeta",
+      "description": "System metadata tracking first user and total accounts"
+    }
+  }
+}
