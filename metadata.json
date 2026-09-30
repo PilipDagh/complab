@@ -1,0 +1,6 @@
+{
+  "name": "TradeTech Bench Assistant",
+  "description": "Comprehensive diagnostic lab suite, interactive hardware decision wizard, CompTIA bench reference toolkit, and Gemini AI assistant for computer repair technicians and trade schools.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
