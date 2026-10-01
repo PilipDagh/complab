@@ -4,6 +4,11 @@ import {
   MOTHERBOARD_BEEP_CODES,
   COMMAND_CHEAT_SHEET,
 } from '../data/seedData';
+import {
+  INITIAL_PARTS_INVENTORY,
+  INVENTORY_CATEGORIES,
+  InventoryCategory,
+} from '../data/shopManagementDatabase';
 import { PSUPinInfo } from '../types';
 import {
   Zap,
@@ -17,10 +22,20 @@ import {
   Info,
   ExternalLink,
   Cpu,
+  Package,
+  Layers,
+  Boxes,
+  Tag,
+  X,
 } from 'lucide-react';
 
 export const BenchReference: React.FC = () => {
-  const [activeSubTab, setActiveSubTab] = useState<'psu' | 'beep' | 'commands' | 'calc'>('psu');
+  const [activeSubTab, setActiveSubTab] = useState<'psu' | 'beep' | 'commands' | 'calc' | 'parts_catalog'>('psu');
+
+  // Parts Catalog State
+  const [partsSearch, setPartsSearch] = useState<string>('');
+  const [partsCategory, setPartsCategory] = useState<InventoryCategory | 'ALL'>('ALL');
+  const [copiedPartSku, setCopiedPartSku] = useState<string | null>(null);
 
   // PSU Interactive State
   const [selectedPin, setSelectedPin] = useState<PSUPinInfo>(PSU_24PIN_DATA[15]); // Default to Pin 16 PS_ON
@@ -133,6 +148,18 @@ export const BenchReference: React.FC = () => {
         >
           <Calculator className="w-4 h-4 text-purple-400" />
           <span>Component PSU Wattage Calculator</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('parts_catalog')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-medium transition-all ${
+            activeSubTab === 'parts_catalog'
+              ? 'bg-[#21262d] text-cyan-300 border border-[#30363d] shadow-sm'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          <Package className="w-4 h-4 text-cyan-400" />
+          <span>PC Parts & Hardware Directory</span>
         </button>
       </div>
 
@@ -694,6 +721,173 @@ export const BenchReference: React.FC = () => {
                 </p>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODULE 5: PC HARDWARE & BENCH PARTS DIRECTORY */}
+      {activeSubTab === 'parts_catalog' && (
+        <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-5 lg:p-7 shadow-2xl space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#30363d] pb-4">
+            <div>
+              <h3 className="text-base font-bold text-white font-mono flex items-center gap-2">
+                <Package className="w-5 h-5 text-cyan-400" />
+                Comprehensive PC Hardware & Spare Parts Catalog
+              </h3>
+              <p className="text-xs text-gray-400 font-sans mt-0.5">
+                Technical database of all {INITIAL_PARTS_INVENTORY.length} PC components, CPU sockets, memory standards, power ratings, and storage form factors.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono px-3 py-1 rounded-lg bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 font-bold">
+                {INITIAL_PARTS_INVENTORY.length} Active Catalog Items
+              </span>
+            </div>
+          </div>
+
+          {/* Search & Category Filter */}
+          <div className="space-y-3 font-mono text-xs">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-500" />
+              <input
+                type="text"
+                placeholder="Search across all PC parts (e.g., 7800X3D, RTX 4090, AM5, DDR5, PCIe 5.0, 1000W)..."
+                value={partsSearch}
+                onChange={(e) => setPartsSearch(e.target.value)}
+                className="w-full bg-[#0d1117] border border-[#30363d] rounded-xl pl-9 pr-8 py-2.5 text-white focus:border-cyan-500 focus:outline-none placeholder-gray-500"
+              />
+              {partsSearch && (
+                <button
+                  onClick={() => setPartsSearch('')}
+                  className="absolute right-3 top-2.5 text-gray-500 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Category selection */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+              <button
+                onClick={() => setPartsCategory('ALL')}
+                className={`px-3 py-1 rounded-lg whitespace-nowrap transition-colors ${
+                  partsCategory === 'ALL'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold'
+                    : 'bg-[#0d1117] text-gray-400 border border-[#30363d] hover:text-white'
+                }`}
+              >
+                All Categories ({INITIAL_PARTS_INVENTORY.length})
+              </button>
+              {INVENTORY_CATEGORIES.map((cat) => {
+                const count = INITIAL_PARTS_INVENTORY.filter((i) => i.category === cat).length;
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setPartsCategory(cat)}
+                    className={`px-2.5 py-1 rounded-lg whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                      partsCategory === cat
+                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold'
+                        : 'bg-[#0d1117] text-gray-400 border border-[#30363d] hover:text-white'
+                    }`}
+                  >
+                    <span>{cat.replace(/\s*\(.*?\)\s*/g, '')}</span>
+                    <span className="text-[10px] px-1 py-0.2 rounded bg-black/40 text-gray-400">
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Parts Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {INITIAL_PARTS_INVENTORY
+              .filter((item) => {
+                const matchesSearch =
+                  partsSearch === '' ||
+                  item.name.toLowerCase().includes(partsSearch.toLowerCase()) ||
+                  item.sku.toLowerCase().includes(partsSearch.toLowerCase()) ||
+                  (item.socket && item.socket.toLowerCase().includes(partsSearch.toLowerCase())) ||
+                  (item.formFactor && item.formFactor.toLowerCase().includes(partsSearch.toLowerCase())) ||
+                  (item.supplier && item.supplier.toLowerCase().includes(partsSearch.toLowerCase()));
+
+                const matchesCat = partsCategory === 'ALL' || item.category === partsCategory;
+                return matchesSearch && matchesCat;
+              })
+              .map((item) => (
+                <div
+                  key={item.id}
+                  className="p-4 rounded-xl bg-[#0d1117] border border-[#30363d] hover:border-cyan-500/50 transition-all flex flex-col justify-between group space-y-3"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#161b22] border border-[#30363d] text-gray-400">
+                        {item.category.replace(/\s*\(.*?\)\s*/g, '')}
+                      </span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        Stock: {item.stock}
+                      </span>
+                    </div>
+
+                    <div>
+                      <div className="font-sans font-semibold text-sm text-gray-100 group-hover:text-white line-clamp-2">
+                        {item.name}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(item.sku);
+                            setCopiedPartSku(item.sku);
+                            setTimeout(() => setCopiedPartSku(null), 2000);
+                          }}
+                          className="text-[10px] font-mono text-cyan-400 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-800/40 flex items-center gap-1 hover:border-cyan-400"
+                          title="Click to copy SKU"
+                        >
+                          <span>{item.sku}</span>
+                          {copiedPartSku === item.sku ? (
+                            <Check className="w-2.5 h-2.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-2.5 h-2.5" />
+                          )}
+                        </button>
+
+                        {item.socket && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-950/40 border border-purple-800/40 text-purple-300 font-semibold">
+                            {item.socket}
+                          </span>
+                        )}
+
+                        {item.formFactor && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-sky-950/40 border border-sky-800/40 text-sky-300">
+                            {item.formFactor}
+                          </span>
+                        )}
+
+                        {item.tdpWatts && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-950/40 border border-amber-800/40 text-amber-300">
+                            {item.tdpWatts}W
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] font-mono text-gray-400 flex items-center justify-between pt-1">
+                      <span>📍 {item.location}</span>
+                      <span className="text-gray-500">{item.supplier}</span>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-[#30363d] pt-2 flex items-center justify-between">
+                    <span className="text-[11px] font-mono text-gray-500">Unit Basis</span>
+                    <span className="font-mono font-bold text-cyan-400 text-sm">
+                      ${item.unitCost.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              ))}
           </div>
         </div>
       )}

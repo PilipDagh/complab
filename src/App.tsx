@@ -7,6 +7,12 @@ import { DiagnosticWizard } from './components/DiagnosticWizard';
 import { GeminiChatbot } from './components/GeminiChatbot';
 import { BenchReference } from './components/BenchReference';
 import { LabCalendar } from './components/LabCalendar';
+import { BoardLevelTriage } from './components/BoardLevelTriage';
+import { NetworkSysadminSuite } from './components/NetworkSysadminSuite';
+import { VocationalEducationSuite } from './components/VocationalEducationSuite';
+import { ShopManagementSuite } from './components/ShopManagementSuite';
+import { ForensicRecoverySuite } from './components/ForensicRecoverySuite';
+import { SignalIntegritySuite } from './components/SignalIntegritySuite';
 import { Toast } from './components/Toast';
 import {
   ShieldCheck,
@@ -29,6 +35,12 @@ const MainContent: React.FC = () => {
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-6">
         {/* Render Tab Views */}
+        {activeTab === 'board_triage' && <BoardLevelTriage />}
+        {activeTab === 'networking' && <NetworkSysadminSuite />}
+        {activeTab === 'vocational' && <VocationalEducationSuite />}
+        {activeTab === 'lab_management' && <ShopManagementSuite />}
+        {activeTab === 'forensics' && <ForensicRecoverySuite />}
+        {activeTab === 'signals' && <SignalIntegritySuite />}
         {activeTab === 'diagnostic' && <DiagnosticWizard />}
         {activeTab === 'reference' && <BenchReference />}
         {activeTab === 'gemini' && <GeminiChatbot />}

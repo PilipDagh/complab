@@ -42,7 +42,7 @@ import {
   deleteHardwareAssetFromFirestore,
 } from '../lib/firestoreService.ts';
 
-export type AppTab = 'diagnostic' | 'reference' | 'gemini' | 'calendar';
+export type AppTab = 'board_triage' | 'networking' | 'vocational' | 'lab_management' | 'forensics' | 'signals' | 'diagnostic' | 'reference' | 'gemini' | 'calendar';
 
 export interface ToastMessage {
   id: string;
