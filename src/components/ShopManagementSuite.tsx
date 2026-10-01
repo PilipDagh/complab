@@ -18,6 +18,8 @@ import {
   InventoryCategory,
   KanbanTicket,
 } from '../data/shopManagementDatabase';
+import { InventoryAnalyticsDashboard } from './InventoryAnalyticsDashboard';
+import { InventoryBarcodeScannerModal } from './InventoryBarcodeScannerModal';
 import {
   LayoutGrid,
   QrCode,
@@ -62,6 +64,10 @@ import {
   Boxes,
   Tag,
   Info,
+  BarChart3,
+  ShieldAlert,
+  Flame,
+  Award,
 } from 'lucide-react';
 
 type Module4ToolId =
@@ -178,6 +184,10 @@ export const ShopManagementSuite: React.FC = () => {
   const [inventoryViewMode, setInventoryViewMode] = useState<'cards' | 'table' | 'compatibility_lab'>('cards');
   const [inventorySortBy, setInventorySortBy] = useState<'category' | 'name' | 'stock' | 'price'>('category');
 
+  // Barcode Scanner & D3 Analytics Modal State
+  const [isBarcodeScannerModalOpen, setIsBarcodeScannerModalOpen] = useState<boolean>(false);
+  const [isAnalyticsDashboardOpen, setIsAnalyticsDashboardOpen] = useState<boolean>(false);
+
   // Add Custom Part Modal State
   const [isAddPartModalOpen, setIsAddPartModalOpen] = useState<boolean>(false);
   const [newPartData, setNewPartData] = useState<{
@@ -193,6 +203,7 @@ export const ShopManagementSuite: React.FC = () => {
     formFactor: string;
     memoryType: string;
     tdpWatts: number;
+    storageCapacity: string;
   }>({
     name: '',
     sku: '',
@@ -206,6 +217,7 @@ export const ShopManagementSuite: React.FC = () => {
     formFactor: 'ATX',
     memoryType: 'DDR5',
     tdpWatts: 105,
+    storageCapacity: '',
   });
 
   // PC Compatibility Builder Selection State
@@ -1195,6 +1207,24 @@ export const ShopManagementSuite: React.FC = () => {
                 {/* Right Top Actions */}
                 <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
                   <button
+                    onClick={() => setIsBarcodeScannerModalOpen(true)}
+                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/50 font-mono text-xs font-semibold shadow-sm transition-all"
+                    title="Real-time Camera Barcode & QR Scanner"
+                  >
+                    <Camera className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Scan Barcode</span>
+                  </button>
+
+                  <button
+                    onClick={() => setIsAnalyticsDashboardOpen(true)}
+                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-500/50 font-mono text-xs font-semibold shadow-sm transition-all"
+                    title="D3.js Telemetry, Lead Times & Failure Charts"
+                  >
+                    <BarChart3 className="w-3.5 h-3.5 text-purple-400" />
+                    <span>D3 Analytics</span>
+                  </button>
+
+                  <button
                     onClick={() => setIsAddPartModalOpen(true)}
                     className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-semibold shadow-sm transition-all"
                   >
@@ -1454,221 +1484,395 @@ export const ShopManagementSuite: React.FC = () => {
 
                   {/* Card View */}
                   {inventoryViewMode === 'cards' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                      {inventory
-                        .filter((item) => {
-                          const matchesSearch =
-                            inventorySearch === '' ||
-                            item.name.toLowerCase().includes(inventorySearch.toLowerCase()) ||
-                            item.sku.toLowerCase().includes(inventorySearch.toLowerCase()) ||
-                            (item.socket && item.socket.toLowerCase().includes(inventorySearch.toLowerCase())) ||
-                            (item.location && item.location.toLowerCase().includes(inventorySearch.toLowerCase())) ||
-                            (item.supplier && item.supplier.toLowerCase().includes(inventorySearch.toLowerCase()));
+                    <div className="space-y-6">
+                      {/* High-Value Flagship Components Spotlight Strip (≥$200) */}
+                      {selectedCategory === 'ALL' && stockStatusFilter === 'ALL' && !inventorySearch && (
+                        <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-950/40 via-gray-950 to-cyan-950/30 border border-purple-500/40 space-y-3.5 shadow-xl">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <ShieldAlert className="w-4 h-4 text-purple-400" />
+                              <h4 className="font-mono font-bold text-white text-xs uppercase tracking-wider flex items-center gap-2">
+                                High-Value Component Flagships (≥ $200.00 Cost Basis)
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 lowercase">
+                                  {inventory.filter((i) => i.unitCost >= 200).length} high-asset parts
+                                </span>
+                              </h4>
+                            </div>
+                            <span className="text-[10px] font-mono text-gray-400 hidden sm:inline">
+                              Vocational Lab Capital Assets &amp; Flagship Hardware
+                            </span>
+                          </div>
 
-                          const matchesCategory = selectedCategory === 'ALL' || item.category === selectedCategory;
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {inventory
+                              .filter((i) => i.unitCost >= 200)
+                              .slice(0, 6)
+                              .map((item) => {
+                                const isLow = item.stock <= item.minThreshold && item.stock > 0;
+                                const isOut = item.stock === 0;
+                                const stockRatio = Math.min(100, Math.round((item.stock / (item.minThreshold * 3)) * 100));
 
-                          let matchesStatus = true;
-                          if (stockStatusFilter === 'LOW') matchesStatus = item.stock <= item.minThreshold && item.stock > 0;
-                          if (stockStatusFilter === 'OUT') matchesStatus = item.stock === 0;
-                          if (stockStatusFilter === 'IN_STOCK') matchesStatus = item.stock > 0;
+                                return (
+                                  <div
+                                    key={item.id}
+                                    className="p-3.5 rounded-xl bg-gray-950/90 border border-purple-500/30 hover:border-purple-500/80 shadow-md hover:shadow-purple-500/10 transition-all flex flex-col justify-between space-y-3 group"
+                                  >
+                                    <div className="space-y-2">
+                                      <div className="flex items-center justify-between gap-1.5">
+                                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-purple-950/60 border border-purple-800/60 text-purple-300">
+                                          {item.sku}
+                                        </span>
+                                        <span className="text-[10px] font-mono font-bold text-cyan-300 bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-800/40">
+                                          ${item.unitCost.toFixed(2)}
+                                        </span>
+                                      </div>
 
-                          return matchesSearch && matchesCategory && matchesStatus;
-                        })
-                        .sort((a, b) => {
-                          if (inventorySortBy === 'name') return a.name.localeCompare(b.name);
-                          if (inventorySortBy === 'stock') return a.stock - b.stock;
-                          if (inventorySortBy === 'price') return b.unitCost - a.unitCost;
-                          return a.category.localeCompare(b.category);
-                        })
-                        .map((item) => {
-                          const isLow = item.stock <= item.minThreshold && item.stock > 0;
-                          const isOut = item.stock === 0;
-                          const stockRatio = Math.min(100, Math.round((item.stock / (item.minThreshold * 3)) * 100));
+                                      <div className="font-sans font-bold text-white text-xs leading-snug line-clamp-2 group-hover:text-purple-200">
+                                        {item.name}
+                                      </div>
 
-                          return (
-                            <div
-                              key={item.id}
-                              className={`p-4 rounded-xl border flex flex-col justify-between transition-all duration-200 group hover:border-cyan-500/50 ${
-                                isOut
-                                  ? 'bg-red-950/20 border-red-500/50 shadow-sm'
-                                  : isLow
-                                  ? 'bg-amber-950/15 border-amber-500/40'
-                                  : 'bg-gray-950 border-gray-800/80 hover:bg-gray-900/60'
-                              }`}
-                            >
-                              <div className="space-y-2">
-                                {/* Top badges row */}
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-gray-900 border border-gray-800 text-gray-400">
-                                    {item.category.replace(/\s*\(.*?\)\s*/g, '')}
-                                  </span>
+                                      <div className="flex flex-wrap gap-1 text-[10px] font-mono">
+                                        {item.socket && (
+                                          <span className="px-1.5 py-0.5 rounded bg-gray-900 text-gray-300 border border-gray-800">
+                                            {item.socket}
+                                          </span>
+                                        )}
+                                        {item.tdpWatts && (
+                                          <span className="px-1.5 py-0.5 rounded bg-amber-950/40 text-amber-300 border border-amber-800/40">
+                                            {item.tdpWatts}W TDP
+                                          </span>
+                                        )}
+                                        {item.formFactor && (
+                                          <span className="px-1.5 py-0.5 rounded bg-sky-950/40 text-sky-300 border border-sky-800/40">
+                                            {item.formFactor}
+                                          </span>
+                                        )}
+                                      </div>
 
-                                  {isOut ? (
-                                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/40 font-bold">
-                                      OUT OF STOCK
+                                      {/* Stock Level Progress Bar */}
+                                      <div className="space-y-1 pt-1">
+                                        <div className="w-full bg-gray-900 rounded-full h-1.5 overflow-hidden">
+                                          <div
+                                            className={`h-full transition-all duration-300 ${
+                                              isOut
+                                                ? 'bg-red-500'
+                                                : isLow
+                                                ? 'bg-amber-400'
+                                                : 'bg-emerald-400'
+                                            }`}
+                                            style={{ width: `${Math.max(6, stockRatio)}%` }}
+                                          ></div>
+                                        </div>
+                                        <div className="flex items-center justify-between text-[10px] font-mono text-gray-400">
+                                          <span>Stock: {item.stock} units</span>
+                                          <span className={isOut ? 'text-red-400 font-bold' : isLow ? 'text-amber-400 font-bold' : 'text-emerald-400'}>
+                                            {isOut ? 'Out of Stock' : isLow ? 'Low Stock' : 'Optimal'}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Quick Reorder Button */}
+                                    <div className="pt-2 border-t border-gray-800/80 flex items-center gap-2">
+                                      <button
+                                        onClick={() => {
+                                          const reorderQty = 5;
+                                          setInventory((prev) =>
+                                            prev.map((i) => (i.id === item.id ? { ...i, stock: i.stock + reorderQty } : i))
+                                          );
+                                          addToast({
+                                            type: 'success',
+                                            title: 'Quick Reorder Placed',
+                                            message: `Ordered +${reorderQty} units of ${item.sku} from ${item.supplier} ($${(item.unitCost * reorderQty).toFixed(2)}).`,
+                                          });
+                                        }}
+                                        className="flex-1 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-mono font-bold text-[10px] flex items-center justify-center gap-1.5 shadow-sm transition-all"
+                                      >
+                                        <RefreshCw className="w-3 h-3" />
+                                        <span>1-Click PO (+5)</span>
+                                      </button>
+
+                                      <div className="flex items-center bg-gray-900 border border-gray-800 rounded-lg p-0.5">
+                                        <button
+                                          onClick={() => {
+                                            setInventory((prev) =>
+                                              prev.map((i) => (i.id === item.id ? { ...i, stock: Math.max(0, i.stock - 1) } : i))
+                                            );
+                                          }}
+                                          className="w-5 h-5 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center font-bold text-xs"
+                                        >
+                                          -
+                                        </button>
+                                        <span className="w-6 text-center font-mono font-bold text-[11px] text-white">
+                                          {item.stock}
+                                        </span>
+                                        <button
+                                          onClick={() => {
+                                            setInventory((prev) =>
+                                              prev.map((i) => (i.id === item.id ? { ...i, stock: i.stock + 1 } : i))
+                                            );
+                                          }}
+                                          className="w-5 h-5 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center font-bold text-xs"
+                                        >
+                                          +
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Main All-Components Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                        {inventory
+                          .filter((item) => {
+                            const matchesSearch =
+                              inventorySearch === '' ||
+                              item.name.toLowerCase().includes(inventorySearch.toLowerCase()) ||
+                              item.sku.toLowerCase().includes(inventorySearch.toLowerCase()) ||
+                              (item.socket && item.socket.toLowerCase().includes(inventorySearch.toLowerCase())) ||
+                              (item.formFactor && item.formFactor.toLowerCase().includes(inventorySearch.toLowerCase())) ||
+                              (item.storageCapacity && item.storageCapacity.toLowerCase().includes(inventorySearch.toLowerCase())) ||
+                              (item.location && item.location.toLowerCase().includes(inventorySearch.toLowerCase())) ||
+                              (item.supplier && item.supplier.toLowerCase().includes(inventorySearch.toLowerCase())) ||
+                              (item.notes && item.notes.toLowerCase().includes(inventorySearch.toLowerCase()));
+
+                            const matchesCategory = selectedCategory === 'ALL' || item.category === selectedCategory;
+
+                            let matchesStatus = true;
+                            if (stockStatusFilter === 'LOW') matchesStatus = item.stock <= item.minThreshold && item.stock > 0;
+                            if (stockStatusFilter === 'OUT') matchesStatus = item.stock === 0;
+                            if (stockStatusFilter === 'IN_STOCK') matchesStatus = item.stock > 0;
+
+                            return matchesSearch && matchesCategory && matchesStatus;
+                          })
+                          .sort((a, b) => {
+                            if (inventorySortBy === 'name') return a.name.localeCompare(b.name);
+                            if (inventorySortBy === 'stock') return a.stock - b.stock;
+                            if (inventorySortBy === 'price') return b.unitCost - a.unitCost;
+                            return a.category.localeCompare(b.category);
+                          })
+                          .map((item) => {
+                            const isLow = item.stock <= item.minThreshold && item.stock > 0;
+                            const isOut = item.stock === 0;
+                            const isHighValue = item.unitCost >= 200;
+                            const stockRatio = Math.min(100, Math.round((item.stock / (item.minThreshold * 3)) * 100));
+
+                            return (
+                              <div
+                                key={item.id}
+                                className={`p-4 rounded-xl border flex flex-col justify-between transition-all duration-200 group hover:border-cyan-500/50 ${
+                                  isOut
+                                    ? 'bg-red-950/20 border-red-500/50 shadow-sm'
+                                    : isLow
+                                    ? 'bg-amber-950/15 border-amber-500/40'
+                                    : isHighValue
+                                    ? 'bg-gray-950 border-purple-500/30 hover:bg-gray-900/60'
+                                    : 'bg-gray-950 border-gray-800/80 hover:bg-gray-900/60'
+                                }`}
+                              >
+                                <div className="space-y-2">
+                                  {/* Top badges row */}
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-gray-900 border border-gray-800 text-gray-400">
+                                      {item.category.replace(/\s*\(.*?\)\s*/g, '')}
                                     </span>
-                                  ) : isLow ? (
-                                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold flex items-center gap-1">
-                                      <AlertTriangle className="w-2.5 h-2.5" />
-                                      LOW ({item.stock} left)
-                                    </span>
-                                  ) : (
-                                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                                      In Stock: {item.stock}
-                                    </span>
-                                  )}
+
+                                    {isOut ? (
+                                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/40 font-bold">
+                                        OUT OF STOCK
+                                      </span>
+                                    ) : isLow ? (
+                                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold flex items-center gap-1">
+                                        <AlertTriangle className="w-2.5 h-2.5" />
+                                        LOW ({item.stock} left)
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                        In Stock: {item.stock}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Part Title & SKU */}
+                                  <div>
+                                    <div className="font-sans font-semibold text-sm text-gray-100 group-hover:text-white leading-snug line-clamp-2">
+                                      {item.name}
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                      <button
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(item.sku);
+                                          addToast({
+                                            type: 'success',
+                                            title: 'SKU Copied',
+                                            message: `Copied ${item.sku} to clipboard`,
+                                          });
+                                        }}
+                                        className="text-[10px] font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-800/40"
+                                        title="Click to copy SKU"
+                                      >
+                                        <span>{item.sku}</span>
+                                        <Copy className="w-2.5 h-2.5" />
+                                      </button>
+
+                                      {item.socket && (
+                                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-950/40 border border-purple-800/40 text-purple-300 font-semibold">
+                                          {item.socket}
+                                        </span>
+                                      )}
+
+                                      {item.formFactor && (
+                                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-sky-950/40 border border-sky-800/40 text-sky-300">
+                                          {item.formFactor}
+                                        </span>
+                                      )}
+
+                                      {item.tdpWatts && (
+                                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-950/40 border border-amber-800/40 text-amber-300">
+                                          {item.tdpWatts}W
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Location & Supplier info */}
+                                  <div className="text-[11px] font-mono text-gray-400 flex items-center justify-between pt-1">
+                                    <span className="truncate">📍 {item.location}</span>
+                                    <span className="text-gray-500">{item.supplier}</span>
+                                  </div>
+
+                                  {/* Stock progress bar */}
+                                  <div className="space-y-1 pt-1">
+                                    <div className="w-full bg-gray-900 rounded-full h-1.5 overflow-hidden">
+                                      <div
+                                        className={`h-full transition-all duration-300 ${
+                                          isOut
+                                            ? 'bg-red-500'
+                                            : isLow
+                                            ? 'bg-amber-400'
+                                            : 'bg-emerald-500'
+                                        }`}
+                                        style={{ width: `${Math.max(5, stockRatio)}%` }}
+                                      ></div>
+                                    </div>
+                                    <div className="flex items-center justify-between text-[10px] font-mono text-gray-500">
+                                      <span>Threshold: {item.minThreshold}</span>
+                                      <span>Current: {item.stock} units</span>
+                                    </div>
+                                  </div>
                                 </div>
 
-                                {/* Part Title & SKU */}
-                                <div>
-                                  <div className="font-sans font-semibold text-sm text-gray-100 group-hover:text-white leading-snug line-clamp-2">
-                                    {item.name}
-                                  </div>
-                                  <div className="flex items-center gap-2 mt-1">
+                                {/* Price, Quick Reorder and Stepper Bottom Bar */}
+                                <div className="border-t border-gray-800/80 pt-3 mt-3 space-y-2.5">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <div className="text-[10px] text-gray-500 font-mono">Unit Price</div>
+                                      <div className="text-sm font-mono font-bold text-cyan-400">
+                                        ${item.unitCost.toFixed(2)}
+                                      </div>
+                                    </div>
+
+                                    {/* One-Click Quick Reorder Button */}
                                     <button
                                       onClick={() => {
-                                        navigator.clipboard.writeText(item.sku);
+                                        const reorderQty = 5;
+                                        setInventory((prev) =>
+                                          prev.map((i) => (i.id === item.id ? { ...i, stock: i.stock + reorderQty } : i))
+                                        );
                                         addToast({
                                           type: 'success',
-                                          title: 'SKU Copied',
-                                          message: `Copied ${item.sku} to clipboard`,
+                                          title: 'Quick Reorder Submitted',
+                                          message: `Restocked +${reorderQty} units of ${item.name} ($${(item.unitCost * reorderQty).toFixed(2)}).`,
                                         });
                                       }}
-                                      className="text-[10px] font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-800/40"
-                                      title="Click to copy SKU"
+                                      className="px-2.5 py-1 rounded-lg bg-emerald-950/70 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-500/40 text-[10px] font-mono font-semibold flex items-center gap-1 transition-colors"
+                                      title="One-click quick reorder 5 units"
                                     >
-                                      <span>{item.sku}</span>
-                                      <Copy className="w-2.5 h-2.5" />
+                                      <RefreshCw className="w-2.5 h-2.5" />
+                                      <span>+5 Reorder</span>
                                     </button>
-
-                                    {item.socket && (
-                                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-950/40 border border-purple-800/40 text-purple-300 font-semibold">
-                                        {item.socket}
-                                      </span>
-                                    )}
-
-                                    {item.formFactor && (
-                                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-sky-950/40 border border-sky-800/40 text-sky-300">
-                                        {item.formFactor}
-                                      </span>
-                                    )}
-
-                                    {item.tdpWatts && (
-                                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-950/40 border border-amber-800/40 text-amber-300">
-                                        {item.tdpWatts}W
-                                      </span>
-                                    )}
                                   </div>
-                                </div>
 
-                                {/* Location & Supplier info */}
-                                <div className="text-[11px] font-mono text-gray-400 flex items-center justify-between pt-1">
-                                  <span className="truncate">📍 {item.location}</span>
-                                  <span className="text-gray-500">{item.supplier}</span>
-                                </div>
-
-                                {/* Stock progress bar */}
-                                <div className="space-y-1 pt-1">
-                                  <div className="w-full bg-gray-900 rounded-full h-1.5 overflow-hidden">
-                                    <div
-                                      className={`h-full transition-all duration-300 ${
-                                        isOut
-                                          ? 'bg-red-500'
-                                          : isLow
-                                          ? 'bg-amber-400'
-                                          : 'bg-emerald-500'
-                                      }`}
-                                      style={{ width: `${Math.max(5, stockRatio)}%` }}
-                                    ></div>
-                                  </div>
-                                  <div className="flex items-center justify-between text-[10px] font-mono text-gray-500">
-                                    <span>Threshold: {item.minThreshold}</span>
-                                    <span>Current: {item.stock} units</span>
+                                  <div className="flex items-center justify-between pt-1 border-t border-gray-800/40">
+                                    <span className="text-[10px] font-mono text-gray-500">Adjust Bench Stock:</span>
+                                    <div className="flex items-center gap-1 bg-gray-900 border border-gray-800 p-0.5 rounded-lg">
+                                      <button
+                                        onClick={() => {
+                                          setInventory((prev) =>
+                                            prev.map((i) => {
+                                              if (i.id === item.id) {
+                                                const newStock = Math.max(0, i.stock - 5);
+                                                return { ...i, stock: newStock };
+                                              }
+                                              return i;
+                                            })
+                                          );
+                                        }}
+                                        className="px-1.5 py-0.5 rounded text-[10px] font-mono text-gray-400 hover:text-white hover:bg-gray-800"
+                                        title="Deduct 5"
+                                      >
+                                        -5
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setInventory((prev) =>
+                                            prev.map((i) => {
+                                              if (i.id === item.id) {
+                                                const newStock = Math.max(0, i.stock - 1);
+                                                if (newStock <= i.minThreshold) {
+                                                  addToast({
+                                                    type: 'warning',
+                                                    title: 'Low Safety Stock',
+                                                    message: `${i.name} down to ${newStock} units.`,
+                                                  });
+                                                }
+                                                return { ...i, stock: newStock };
+                                              }
+                                              return i;
+                                            })
+                                          );
+                                        }}
+                                        className="w-5 h-5 rounded bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold flex items-center justify-center text-xs"
+                                        title="Deduct 1"
+                                      >
+                                        -
+                                      </button>
+                                      <span className="w-7 text-center font-mono font-bold text-xs text-white">
+                                        {item.stock}
+                                      </span>
+                                      <button
+                                        onClick={() => {
+                                          setInventory((prev) =>
+                                            prev.map((i) => (i.id === item.id ? { ...i, stock: i.stock + 1 } : i))
+                                          );
+                                        }}
+                                        className="w-5 h-5 rounded bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold flex items-center justify-center text-xs"
+                                        title="Add 1"
+                                      >
+                                        +
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setInventory((prev) =>
+                                            prev.map((i) => (i.id === item.id ? { ...i, stock: i.stock + 5 } : i))
+                                          );
+                                        }}
+                                        className="px-1.5 py-0.5 rounded text-[10px] font-mono text-gray-400 hover:text-white hover:bg-gray-800"
+                                        title="Add 5"
+                                      >
+                                        +5
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
-
-                              {/* Price and Stock Stepper Bottom Bar */}
-                              <div className="border-t border-gray-800/80 pt-3 mt-3 flex items-center justify-between">
-                                <div>
-                                  <div className="text-xs text-gray-500 font-mono">Unit Price</div>
-                                  <div className="text-base font-mono font-bold text-cyan-400">
-                                    ${item.unitCost.toFixed(2)}
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-1 bg-gray-900 border border-gray-800 p-1 rounded-lg">
-                                  <button
-                                    onClick={() => {
-                                      setInventory((prev) =>
-                                        prev.map((i) => {
-                                          if (i.id === item.id) {
-                                            const newStock = Math.max(0, i.stock - 5);
-                                            return { ...i, stock: newStock };
-                                          }
-                                          return i;
-                                        })
-                                      );
-                                    }}
-                                    className="px-1.5 py-0.5 rounded text-[10px] font-mono text-gray-400 hover:text-white hover:bg-gray-800"
-                                    title="Deduct 5"
-                                  >
-                                    -5
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setInventory((prev) =>
-                                        prev.map((i) => {
-                                          if (i.id === item.id) {
-                                            const newStock = Math.max(0, i.stock - 1);
-                                            if (newStock <= i.minThreshold) {
-                                              addToast({
-                                                type: 'warning',
-                                                title: 'Low Safety Stock',
-                                                message: `${i.name} down to ${newStock} units.`,
-                                              });
-                                            }
-                                            return { ...i, stock: newStock };
-                                          }
-                                          return i;
-                                        })
-                                      );
-                                    }}
-                                    className="w-6 h-6 rounded bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold flex items-center justify-center text-xs"
-                                    title="Deduct 1"
-                                  >
-                                    -
-                                  </button>
-                                  <span className="w-8 text-center font-mono font-bold text-xs text-white">
-                                    {item.stock}
-                                  </span>
-                                  <button
-                                    onClick={() => {
-                                      setInventory((prev) =>
-                                        prev.map((i) => (i.id === item.id ? { ...i, stock: i.stock + 1 } : i))
-                                      );
-                                    }}
-                                    className="w-6 h-6 rounded bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold flex items-center justify-center text-xs"
-                                    title="Add 1"
-                                  >
-                                    +
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setInventory((prev) =>
-                                        prev.map((i) => (i.id === item.id ? { ...i, stock: i.stock + 5 } : i))
-                                      );
-                                    }}
-                                    className="px-1.5 py-0.5 rounded text-[10px] font-mono text-gray-400 hover:text-white hover:bg-gray-800"
-                                    title="Add 5"
-                                  >
-                                    +5
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                      </div>
                     </div>
                   )}
 
@@ -1696,7 +1900,11 @@ export const ShopManagementSuite: React.FC = () => {
                                 item.name.toLowerCase().includes(inventorySearch.toLowerCase()) ||
                                 item.sku.toLowerCase().includes(inventorySearch.toLowerCase()) ||
                                 (item.socket && item.socket.toLowerCase().includes(inventorySearch.toLowerCase())) ||
-                                (item.location && item.location.toLowerCase().includes(inventorySearch.toLowerCase()));
+                                (item.formFactor && item.formFactor.toLowerCase().includes(inventorySearch.toLowerCase())) ||
+                                (item.storageCapacity && item.storageCapacity.toLowerCase().includes(inventorySearch.toLowerCase())) ||
+                                (item.location && item.location.toLowerCase().includes(inventorySearch.toLowerCase())) ||
+                                (item.supplier && item.supplier.toLowerCase().includes(inventorySearch.toLowerCase())) ||
+                                (item.notes && item.notes.toLowerCase().includes(inventorySearch.toLowerCase()));
 
                               const matchesCategory = selectedCategory === 'ALL' || item.category === selectedCategory;
 
@@ -2421,6 +2629,7 @@ export const ShopManagementSuite: React.FC = () => {
                   formFactor: newPartData.formFactor.trim() || undefined,
                   memoryType: newPartData.memoryType.trim() || undefined,
                   tdpWatts: Number(newPartData.tdpWatts) || undefined,
+                  storageCapacity: newPartData.storageCapacity.trim() || undefined,
                 };
                 setInventory((prev) => [newPart, ...prev]);
                 setIsAddPartModalOpen(false);
@@ -2539,7 +2748,7 @@ export const ShopManagementSuite: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-2 pt-1 border-t border-gray-800">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1 border-t border-gray-800">
                 <div>
                   <label className="block text-gray-500 text-[10px] mb-1">Socket</label>
                   <input
@@ -2580,6 +2789,16 @@ export const ShopManagementSuite: React.FC = () => {
                     className="w-full bg-gray-900 border border-gray-800 rounded p-1.5 text-white text-[11px]"
                   />
                 </div>
+                <div>
+                  <label className="block text-gray-500 text-[10px] mb-1">Capacity / Size</label>
+                  <input
+                    type="text"
+                    placeholder="2TB / 64GB"
+                    value={newPartData.storageCapacity}
+                    onChange={(e) => setNewPartData((prev) => ({ ...prev, storageCapacity: e.target.value }))}
+                    className="w-full bg-gray-900 border border-gray-800 rounded p-1.5 text-white text-[11px]"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-800">
@@ -2598,6 +2817,64 @@ export const ShopManagementSuite: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Real-time Camera Barcode & QR Scanner Modal */}
+      <InventoryBarcodeScannerModal
+        isOpen={isBarcodeScannerModalOpen}
+        onClose={() => setIsBarcodeScannerModalOpen(false)}
+        inventory={inventory}
+        kanbanTickets={kanbanTickets}
+        onUpdateStock={(itemId, newStock, workOrderId) => {
+          setInventory((prev) =>
+            prev.map((i) => {
+              if (i.id === itemId) {
+                return { ...i, stock: newStock };
+              }
+              return i;
+            })
+          );
+          const target = inventory.find((i) => i.id === itemId);
+          if (target) {
+            addToast({
+              type: 'success',
+              title: 'Barcode Scanner Transaction',
+              message: `${target.name} (${target.sku}) stock updated to ${newStock} units${
+                workOrderId ? ` (Linked to Work Order #${workOrderId})` : ''
+              }.`,
+            });
+          }
+        }}
+        onTriggerLowStockAlert={(item) => {
+          addToast({
+            type: 'warning',
+            title: 'Low Safety Stock Alert',
+            message: `${item.name} (${item.sku}) is below safety threshold (${item.stock} left / min ${item.minThreshold}).`,
+          });
+        }}
+      />
+
+      {/* D3.js Hardware Telemetry & Consumption Dashboard Overlay Modal */}
+      {isAnalyticsDashboardOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="max-w-4xl w-full max-h-[92vh] overflow-y-auto">
+            <InventoryAnalyticsDashboard
+              inventory={inventory}
+              onClose={() => setIsAnalyticsDashboardOpen(false)}
+              onQuickReorder={(item) => {
+                const reorderQty = 5;
+                setInventory((prev) =>
+                  prev.map((i) => (i.id === item.id ? { ...i, stock: i.stock + reorderQty } : i))
+                );
+                addToast({
+                  type: 'success',
+                  title: '1-Click PO Generated',
+                  message: `Reordered +${reorderQty} units of ${item.sku} ($${(item.unitCost * reorderQty).toFixed(2)}) from ${item.supplier}.`,
+                });
+              }}
+            />
           </div>
         </div>
       )}

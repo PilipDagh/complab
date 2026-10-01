@@ -184,13 +184,120 @@ export const LabCalendar: React.FC = () => {
     );
   }
 
-  // Generate simple 30-day interactive calendar grid
-  const daysInGrid = Array.from({ length: 30 }, (_, i) => {
-    const dayNum = i + 1;
-    const dateStr = `2026-09-${dayNum.toString().padStart(2, '0')}`;
-    const log = calendarLogs.find((l) => l.dateString === dateStr);
-    return { dateStr, dayNum, log };
+  // Dynamic Month & Year Navigation State (0-indexed month)
+  const initialDateParts = (selectedDate || '').split('-');
+  const [viewYear, setViewYear] = useState<number>(() => {
+    return initialDateParts.length === 3 ? parseInt(initialDateParts[0], 10) || 2026 : 2026;
   });
+  const [viewMonth, setViewMonth] = useState<number>(() => {
+    return initialDateParts.length === 3 ? (parseInt(initialDateParts[1], 10) - 1) || 9 : 9; // October (index 9) / current
+  });
+
+  const MONTH_NAMES = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+
+  const handlePrevMonth = () => {
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear((y) => y - 1);
+    } else {
+      setViewMonth((m) => m - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear((y) => y + 1);
+    } else {
+      setViewMonth((m) => m + 1);
+    }
+  };
+
+  const handleJumpToToday = () => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = today.getMonth();
+    const d = today.getDate();
+    const todayStr = `${y}-${(m + 1).toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
+    setViewYear(y);
+    setViewMonth(m);
+    handleDateSelect(todayStr);
+  };
+
+  // Generate dynamic calendar grid for viewYear and viewMonth
+  const daysInCurrentMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const daysInPrevMonth = new Date(viewYear, viewMonth, 0).getDate();
+  const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay(); // 0 = Sunday
+
+  interface CalendarGridCell {
+    dateStr: string;
+    dayNum: number;
+    isCurrentMonth: boolean;
+    isToday: boolean;
+    log?: DailyActivityLog;
+  }
+
+  const calendarGridCells: CalendarGridCell[] = [];
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  // Previous month trailing padding days
+  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+    const dayNum = daysInPrevMonth - i;
+    const prevMonthIdx = viewMonth === 0 ? 11 : viewMonth - 1;
+    const prevYear = viewMonth === 0 ? viewYear - 1 : viewYear;
+    const dateStr = `${prevYear}-${(prevMonthIdx + 1).toString().padStart(2, '0')}-${dayNum.toString().padStart(2, '0')}`;
+    const log = calendarLogs.find((l) => l.dateString === dateStr);
+    calendarGridCells.push({
+      dateStr,
+      dayNum,
+      isCurrentMonth: false,
+      isToday: dateStr === todayStr,
+      log,
+    });
+  }
+
+  // Current month days
+  for (let day = 1; day <= daysInCurrentMonth; day++) {
+    const dateStr = `${viewYear}-${(viewMonth + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+    const log = calendarLogs.find((l) => l.dateString === dateStr);
+    calendarGridCells.push({
+      dateStr,
+      dayNum: day,
+      isCurrentMonth: true,
+      isToday: dateStr === todayStr,
+      log,
+    });
+  }
+
+  // Next month leading padding days to fill grid (35 or 42 slots)
+  const totalSlots = calendarGridCells.length > 35 ? 42 : 35;
+  const remainingSlots = totalSlots - calendarGridCells.length;
+  for (let day = 1; day <= remainingSlots; day++) {
+    const nextMonthIdx = viewMonth === 11 ? 0 : viewMonth + 1;
+    const nextYear = viewMonth === 11 ? viewYear + 1 : viewYear;
+    const dateStr = `${nextYear}-${(nextMonthIdx + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+    const log = calendarLogs.find((l) => l.dateString === dateStr);
+    calendarGridCells.push({
+      dateStr,
+      dayNum: day,
+      isCurrentMonth: false,
+      isToday: dateStr === todayStr,
+      log,
+    });
+  }
 
   const ongoingProjects = projects.filter((p) => p.status === 'ongoing');
   const archivedProjects = projects.filter((p) => p.status === 'archived');
@@ -265,12 +372,48 @@ export const LabCalendar: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Calendar Grid (Left 7 Cols) */}
           <div className="lg:col-span-6 bg-[#161b22] border border-[#30363d] rounded-2xl p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#30363d]">
-              <span className="font-mono text-sm font-bold text-white flex items-center gap-2">
-                <CalendarIcon className="w-4 h-4 text-[#38bdf8]" />
-                September 2026 Lab Rotation
-              </span>
-              <div className="flex items-center gap-3 text-[10px] font-mono">
+            {/* Dynamic Month Header Controls */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#30363d]">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-sky-950/60 border border-sky-500/40 text-sky-400">
+                  <CalendarIcon className="w-4 h-4" />
+                </div>
+                <h3 className="font-mono text-sm font-bold text-white">
+                  {MONTH_NAMES[viewMonth]} {viewYear}
+                </h3>
+              </div>
+
+              {/* Prev / Today / Next Controls */}
+              <div className="flex items-center gap-1.5 self-end sm:self-auto font-mono text-xs">
+                <button
+                  onClick={handlePrevMonth}
+                  className="p-1.5 rounded-lg bg-[#0d1117] hover:bg-[#21262d] text-gray-300 hover:text-white border border-[#30363d] transition-colors"
+                  title="Previous Month"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+
+                <button
+                  onClick={handleJumpToToday}
+                  className="px-2.5 py-1 rounded-lg bg-[#0d1117] hover:bg-[#21262d] text-gray-300 hover:text-white border border-[#30363d] text-[11px] transition-colors"
+                >
+                  Today
+                </button>
+
+                <button
+                  onClick={handleNextMonth}
+                  className="p-1.5 rounded-lg bg-[#0d1117] hover:bg-[#21262d] text-gray-300 hover:text-white border border-[#30363d] transition-colors"
+                  title="Next Month"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Status Legend */}
+            <div className="flex items-center justify-between text-[10px] font-mono text-gray-400 pb-1 px-1">
+              <span>{calendarLogs.length} saved activity logs across all months</span>
+              <div className="flex items-center gap-2.5">
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-[#2ea043]"></span> Completed
                 </span>
@@ -294,9 +437,9 @@ export const LabCalendar: React.FC = () => {
               <span>SAT</span>
             </div>
 
-            {/* 30 Day Grid */}
+            {/* Dynamic Multi-Month Calendar Grid */}
             <div className="grid grid-cols-7 gap-1.5">
-              {daysInGrid.map(({ dateStr, dayNum, log }) => {
+              {calendarGridCells.map(({ dateStr, dayNum, isCurrentMonth, isToday, log }) => {
                 const isSelected = selectedDate === dateStr;
                 return (
                   <button
@@ -305,35 +448,44 @@ export const LabCalendar: React.FC = () => {
                     className={`h-16 rounded-xl p-1.5 text-left border flex flex-col justify-between transition-all relative overflow-hidden ${
                       isSelected
                         ? 'bg-[#21262d] border-[#38bdf8] ring-2 ring-[#38bdf8] shadow-md z-10'
-                        : 'bg-[#0d1117] border-[#30363d] hover:border-gray-500'
+                        : isCurrentMonth
+                        ? 'bg-[#0d1117] border-[#30363d] hover:border-gray-500'
+                        : 'bg-[#0a0d12] border-[#21262d] opacity-40 hover:opacity-80'
                     }`}
                   >
                     <div className="flex items-center justify-between w-full">
                       <span
                         className={`font-mono text-xs font-bold ${
-                          isSelected ? 'text-[#38bdf8]' : 'text-gray-300'
+                          isSelected
+                            ? 'text-[#38bdf8]'
+                            : isToday
+                            ? 'text-amber-400 underline underline-offset-2'
+                            : isCurrentMonth
+                            ? 'text-gray-200'
+                            : 'text-gray-500'
                         }`}
                       >
                         {dayNum}
                       </span>
                       {log && (
                         <span
-                          className={`w-2 h-2 rounded-full ${
+                          className={`w-2.5 h-2.5 rounded-full shadow-sm ${
                             log.status === 'completed'
-                              ? 'bg-[#2ea043]'
+                              ? 'bg-[#2ea043] ring-1 ring-emerald-400'
                               : log.status === 'issue_hold'
-                              ? 'bg-[#f85149]'
-                              : 'bg-[#ffd166]'
+                              ? 'bg-[#f85149] ring-1 ring-red-400'
+                              : 'bg-[#ffd166] ring-1 ring-amber-400'
                           }`}
+                          title={`Status: ${log.status}`}
                         />
                       )}
                     </div>
-                    {log?.topicsCovered ? (
-                      <span className="text-[9px] text-gray-400 line-clamp-2 leading-tight">
-                        {log.topicsCovered}
+                    {log?.topicsCovered || log?.benchRepairsPerformed ? (
+                      <span className="text-[9px] text-gray-300 line-clamp-2 leading-tight font-sans">
+                        {log.topicsCovered || log.benchRepairsPerformed}
                       </span>
                     ) : (
-                      <span className="text-[9px] text-gray-600 italic">No notes</span>
+                      <span className="text-[9px] text-gray-700 italic">No entry</span>
                     )}
                   </button>
                 );
@@ -341,8 +493,8 @@ export const LabCalendar: React.FC = () => {
             </div>
 
             <div className="pt-2 text-[11px] text-gray-400 font-mono flex items-center justify-between border-t border-[#30363d]">
-              <span>Selected Date: {selectedDate}</span>
-              <span className="text-[#38bdf8]">Click any day to update log</span>
+              <span>Selected Date: <strong className="text-white">{selectedDate}</strong></span>
+              <span className="text-[#38bdf8]">Click any day to record or edit notes</span>
             </div>
           </div>
 

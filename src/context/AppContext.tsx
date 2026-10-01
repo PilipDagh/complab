@@ -198,36 +198,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setUsers(fsUsers);
         }
 
-        // Fetch Daily Calendar Logs from Firestore
+        // Fetch Daily Calendar Logs from Firestore or start clean
         const fsLogs = await fetchCalendarLogsFromFirestore();
         if (fsLogs && fsLogs.length > 0) {
           setCalendarLogs(fsLogs);
         } else {
-          setCalendarLogs(INITIAL_CALENDAR_LOGS);
-          // Seed initial demo logs to Firestore asynchronously
-          for (const initLog of INITIAL_CALENDAR_LOGS) {
-            try {
-              await saveCalendarLogToFirestore(initLog);
-            } catch (seedErr) {
-              console.warn('Initial calendar log seed fallback:', seedErr);
-            }
-          }
+          setCalendarLogs([]);
         }
 
-        // Fetch Projects / Work Orders from Firestore
+        // Fetch Projects / Work Orders from Firestore or start clean
         const fsProjects = await fetchProjectsFromFirestore();
         if (fsProjects && fsProjects.length > 0) {
           setProjects(fsProjects);
         } else {
-          setProjects(INITIAL_PROJECT_WORK_ORDERS);
-          // Seed initial projects to Firestore asynchronously
-          for (const initProj of INITIAL_PROJECT_WORK_ORDERS) {
-            try {
-              await saveProjectToFirestore(initProj);
-            } catch (seedErr) {
-              console.warn('Initial project seed fallback:', seedErr);
-            }
-          }
+          setProjects([]);
         }
 
         // Fetch Hardware Assets from Firestore
