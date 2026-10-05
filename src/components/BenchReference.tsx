@@ -9,6 +9,8 @@ import {
   INVENTORY_CATEGORIES,
   InventoryCategory,
 } from '../data/shopManagementDatabase';
+import { BottleneckCalculator } from './BottleneckCalculator';
+import { QuickSpecsWidget } from './QuickSpecsWidget';
 import { PSUPinInfo } from '../types';
 import {
   Zap,
@@ -27,10 +29,11 @@ import {
   Boxes,
   Tag,
   X,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 export const BenchReference: React.FC = () => {
-  const [activeSubTab, setActiveSubTab] = useState<'psu' | 'beep' | 'commands' | 'calc' | 'parts_catalog'>('psu');
+  const [activeSubTab, setActiveSubTab] = useState<'quick_specs' | 'psu' | 'beep' | 'commands' | 'calc' | 'bottleneck' | 'parts_catalog'>('quick_specs');
 
   // Parts Catalog State
   const [partsSearch, setPartsSearch] = useState<string>('');
@@ -103,6 +106,18 @@ export const BenchReference: React.FC = () => {
       {/* Sub-Tab Navigation */}
       <div className="flex items-center gap-2 p-1.5 bg-[#161b22] border border-[#30363d] rounded-2xl overflow-x-auto scrollbar-none">
         <button
+          onClick={() => setActiveSubTab('quick_specs')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-medium transition-all ${
+            activeSubTab === 'quick_specs'
+              ? 'bg-[#21262d] text-cyan-300 border border-[#30363d] shadow-sm font-bold'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          <Cpu className="w-4 h-4 text-cyan-400" />
+          <span>Quick Specs (CPU/RAM Compatibility)</span>
+        </button>
+
+        <button
           onClick={() => setActiveSubTab('psu')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-medium transition-all ${
             activeSubTab === 'psu'
@@ -111,7 +126,7 @@ export const BenchReference: React.FC = () => {
           }`}
         >
           <Zap className="w-4 h-4 text-[#ffd166]" />
-          <span>PSU Pinouts & Voltage Tolerances</span>
+          <span>PSU Pinouts & Tolerances</span>
         </button>
 
         <button
@@ -147,7 +162,19 @@ export const BenchReference: React.FC = () => {
           }`}
         >
           <Calculator className="w-4 h-4 text-purple-400" />
-          <span>Component PSU Wattage Calculator</span>
+          <span>PSU Wattage Calculator</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('bottleneck')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-medium transition-all ${
+            activeSubTab === 'bottleneck'
+              ? 'bg-[#21262d] text-cyan-300 border border-[#30363d] shadow-sm'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          <SlidersHorizontal className="w-4 h-4 text-cyan-400" />
+          <span>Bottleneck Gauge Calculator</span>
         </button>
 
         <button
@@ -159,9 +186,16 @@ export const BenchReference: React.FC = () => {
           }`}
         >
           <Package className="w-4 h-4 text-cyan-400" />
-          <span>PC Parts & Hardware Directory</span>
+          <span>PC Parts Directory ({INITIAL_PARTS_INVENTORY.length}+)</span>
         </button>
       </div>
+
+      {/* MODULE 0: QUICK SPECS & HARDWARE COMPATIBILITY STANDARDS */}
+      {activeSubTab === 'quick_specs' && (
+        <QuickSpecsWidget
+          onNavigateToReference={(sub) => setActiveSubTab(sub as any || 'psu')}
+        />
+      )}
 
       {/* MODULE 1: PSU PINOUT & VOLTAGE REFERENCE */}
       {activeSubTab === 'psu' && (
@@ -725,7 +759,14 @@ export const BenchReference: React.FC = () => {
         </div>
       )}
 
-      {/* MODULE 5: PC HARDWARE & BENCH PARTS DIRECTORY */}
+      {/* MODULE 5: BOTTLENECK GAUGE CALCULATOR */}
+      {activeSubTab === 'bottleneck' && (
+        <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-5 lg:p-7 shadow-2xl">
+          <BottleneckCalculator inventory={INITIAL_PARTS_INVENTORY} />
+        </div>
+      )}
+
+      {/* MODULE 6: PC HARDWARE & BENCH PARTS DIRECTORY */}
       {activeSubTab === 'parts_catalog' && (
         <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-5 lg:p-7 shadow-2xl space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#30363d] pb-4">

@@ -6,6 +6,73 @@
  */
 
 import pcHardwareCatalogJson from './pcHardwareCatalog.json';
+import laptopsCatalogJson from './laptopsCatalog.json';
+
+export interface LaptopAsset {
+  id: string;
+  assetTag: string; // e.g. "LAP-DL-XPS16-001"
+  model: string;
+  brand: 'Dell' | 'Lenovo' | 'HP' | 'Apple' | 'ASUS' | 'Acer' | 'MSI' | 'Razer' | 'Framework' | 'Microsoft' | 'Panasonic' | 'Samsung' | 'Gigabyte';
+  category: 'Workstation' | 'Creator' | 'Gaming Flagship' | 'Ultrabook' | 'Enterprise Business' | 'Student Loaner' | 'Rugged Field' | 'Convertible 2-in-1';
+  screen: string;
+  cpu: string;
+  gpu: string;
+  ram: string;
+  ramUpgrade: 'Soldered' | '2x SO-DIMM (Upgradable)' | '1x Soldered + 1x SO-DIMM' | 'Modular CAMM2';
+  storage: string;
+  storageSlots: 'Single M.2' | 'Dual M.2 Gen4' | 'Dual M.2 (Gen5 + Gen4)' | 'Proprietary Apple SSD';
+  batteryWh: number;
+  batteryHealth: number;
+  weightKg: number;
+  powerAdapterWatts: number;
+  os: 'Windows 11 Pro' | 'Windows 11 Home' | 'macOS Sonoma' | 'macOS Sequoia' | 'Ubuntu Linux 24.04' | 'ChromeOS';
+  ports: string;
+  teardownDifficulty: 1 | 2 | 3 | 4 | 5;
+  status: 'In Fleet / Available' | 'Assigned to Student' | 'Under Triage / Bench' | 'Awaiting Parts' | 'Decommissioned';
+  assignedBench?: string;
+  commonFaults: string;
+  notes: string;
+}
+
+export const INITIAL_LAPTOPS_CATALOG: LaptopAsset[] = laptopsCatalogJson as LaptopAsset[];
+
+export interface SavedHardwareCombo {
+  id: string;
+  name: string;
+  category: 'Gaming Build' | 'Workstation / CAD' | 'AI / Machine Learning' | 'Esports Budget' | 'Bench Test Kit' | 'Student Lab Practice';
+  targetClient?: string;
+  ticketRef?: string;
+  benchStation?: string;
+  targetResolution?: '1080p' | '1440p' | '4K UHD' | '8K' | 'Ultrawide';
+  targetWorkload?: string;
+  parts: {
+    partId: string;
+    sku: string;
+    name: string;
+    category: InventoryCategory;
+    unitCost: number;
+    quantity: number;
+    tdpWatts?: number;
+    socket?: string;
+    location?: string;
+  }[];
+  totalCost: number;
+  totalTdp: number;
+  recommendedPsu: number;
+  bottleneckRating: {
+    cpuScore: number;
+    gpuScore: number;
+    bottleneckPercent: number;
+    mainBottleneck: 'CPU Bound' | 'GPU Bound' | 'Balanced Synergy';
+    severity: 'Minimal' | 'Mild' | 'Noticeable' | 'Severe';
+  };
+  notes?: string;
+  dateCreated: string;
+  dateUpdated: string;
+  technicianName: string;
+}
+
+export const INITIAL_SAVED_COMBOS: SavedHardwareCombo[] = [];
 
 export interface BenchStation {
   id: string; // e.g. "b01"

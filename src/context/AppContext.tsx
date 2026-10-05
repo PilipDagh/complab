@@ -42,7 +42,18 @@ import {
   deleteHardwareAssetFromFirestore,
 } from '../lib/firestoreService.ts';
 
-export type AppTab = 'board_triage' | 'networking' | 'vocational' | 'lab_management' | 'forensics' | 'signals' | 'diagnostic' | 'reference' | 'gemini' | 'calendar';
+export type AppTab =
+  | 'board_triage'
+  | 'networking'
+  | 'vocational'
+  | 'lab_management'
+  | 'forensics'
+  | 'signals'
+  | 'diagnostic'
+  | 'reference'
+  | 'gemini'
+  | 'calendar'
+  | 'assets';
 
 export interface ToastMessage {
   id: string;
@@ -60,14 +71,20 @@ interface AppContextType {
   currentUser: User | null;
   users: User[];
   isOwner: boolean;
+  isAdmin: boolean;
+  isWorker: boolean;
   isGuest: boolean;
   loginUser: (usernameOrEmail: string, password?: string) => Promise<{ success: boolean; message: string }>;
   signupUser: (usernameOrEmail: string, password?: string, displayName?: string) => Promise<{ success: boolean; message: string }>;
   signInWithGoogle: () => Promise<void>;
   logoutUser: () => void;
   switchUserQuick: (userId: string) => void;
+  updateUserWorkstation: (userId: string, benchStation: string, currentTask: string, clockedIn: boolean) => Promise<void>;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
+  authModalMode: 'login' | 'signup' | 'profiles_menu';
+  setAuthModalMode: (mode: 'login' | 'signup' | 'profiles_menu') => void;
+  openAuthModal: (mode?: 'login' | 'signup' | 'profiles_menu') => void;
   isAuthLoading: boolean;
 
   // Diagnostics
@@ -130,7 +147,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Navigation
   const [activeTab, setActiveTab] = useState<AppTab>('diagnostic');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'signup' | 'profiles_menu'>('login');
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
+
+  const openAuthModal = (mode: 'login' | 'signup' | 'profiles_menu' = 'login') => {
+    setAuthModalMode(mode);
+    setIsAuthModalOpen(true);
+  };
 
   // Standard Web User Login: GUEST by default unless previously logged in via Chrome/Browser session!
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -192,10 +215,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const loadFirestoreData = async () => {
       try {
-        // Fetch Users from Firestore
+        // Fetch Users from Firestore or use Initial Users
         const fsUsers = await fetchUsersFromFirestore();
         if (fsUsers && fsUsers.length > 0) {
-          setUsers(fsUsers);
+          const userMap = new Map<string, User>();
+          INITIAL_USERS.forEach((u) => userMap.set(u.id, u));
+          fsUsers.forEach((u) => userMap.set(u.id, u));
+          setUsers(Array.from(userMap.values()));
+        } else {
+          setUsers(INITIAL_USERS);
         }
 
         // Fetch Daily Calendar Logs from Firestore or start clean
@@ -239,7 +267,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Auth Operations
   const isOwner = currentUser?.role === 'ROLE_OWNER';
+  const isAdmin = currentUser?.role === 'ROLE_OWNER';
+  const isWorker = currentUser?.role === 'ROLE_WORKER' || currentUser?.role === 'ROLE_STUDENT';
   const isGuest = currentUser === null;
+
+  const updateUserWorkstation = async (
+    userId: string,
+    benchStation: string,
+    currentTask: string,
+    clockedIn: boolean
+  ) => {
+    const clockInTime = clockedIn
+      ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : undefined;
+
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.id === userId
+          ? {
+              ...u,
+              benchStation,
+              currentTask,
+              clockedIn,
+              ...(clockInTime ? { clockInTime } : clockedIn ? {} : { clockInTime: undefined }),
+            }
+          : u
+      )
+    );
+
+    if (currentUser && currentUser.id === userId) {
+      setCurrentUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              benchStation,
+              currentTask,
+              clockedIn,
+              ...(clockInTime ? { clockInTime } : clockedIn ? {} : { clockInTime: undefined }),
+            }
+          : null
+      );
+    }
+
+    addToast({
+      type: clockedIn ? 'success' : 'info',
+      title: clockedIn ? 'Station Clock-In Confirmed' : 'Clocked Out of Station',
+      message: clockedIn
+        ? `Clocked in at ${benchStation}. Active Task: ${currentTask || 'General Bench Operations'}.`
+        : `Clocked out of ${benchStation}. Session logged.`,
+    });
+  };
 
   const loginUser = async (usernameOrEmail: string, password = ''): Promise<{ success: boolean; message: string }> => {
     if (!usernameOrEmail.trim()) {
@@ -1006,14 +1083,20 @@ Previous Repairs: ${activeScannedAsset.repairHistory.map((r) => `[${r.date}] ${r
         currentUser,
         users,
         isOwner,
+        isAdmin,
+        isWorker,
         isGuest,
         loginUser,
         signupUser,
         signInWithGoogle,
         logoutUser,
         switchUserQuick,
+        updateUserWorkstation,
         isAuthModalOpen,
         setIsAuthModalOpen,
+        authModalMode,
+        setAuthModalMode,
+        openAuthModal,
         isAuthLoading,
 
         categories,

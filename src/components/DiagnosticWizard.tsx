@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { QuickSpecsWidget } from './QuickSpecsWidget';
 import {
   Zap,
   Monitor,
@@ -22,9 +23,11 @@ import {
   History,
   X,
   ExternalLink,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 export const DiagnosticWizard: React.FC = () => {
+  const [showQuickSpecs, setShowQuickSpecs] = useState<boolean>(true);
   const {
     categories,
     activeCategoryId,
@@ -88,6 +91,17 @@ export const DiagnosticWizard: React.FC = () => {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <button
+              onClick={() => setShowQuickSpecs((prev) => !prev)}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold transition-all border ${
+                showQuickSpecs
+                  ? 'bg-cyan-950/60 border-cyan-400 text-cyan-300 shadow-md shadow-cyan-950/30 ring-1 ring-cyan-500/40'
+                  : 'bg-[#21262d] hover:bg-[#30363d] text-gray-300 border-[#30363d]'
+              }`}
+            >
+              <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+              <span>{showQuickSpecs ? 'Hide Quick Specs' : 'Quick Specs (CPU/RAM)'}</span>
+            </button>
+            <button
               onClick={() => setIsScannerModalOpen(true)}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-mono font-bold shadow-md shadow-cyan-950/30 transition-all border border-cyan-400/30"
             >
@@ -149,6 +163,11 @@ export const DiagnosticWizard: React.FC = () => {
           })}
         </div>
       </div>
+
+      {/* Embedded Quick Specs Compatibility Widget */}
+      {showQuickSpecs && (
+        <QuickSpecsWidget embeddedInDashboard={true} />
+      )}
 
       {/* Active Hardware Target Banner if scanned */}
       {activeScannedAsset && (

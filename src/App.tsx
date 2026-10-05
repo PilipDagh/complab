@@ -13,6 +13,7 @@ import { VocationalEducationSuite } from './components/VocationalEducationSuite'
 import { ShopManagementSuite } from './components/ShopManagementSuite';
 import { ForensicRecoverySuite } from './components/ForensicRecoverySuite';
 import { SignalIntegritySuite } from './components/SignalIntegritySuite';
+import { AssetInventoryManager } from './components/AssetInventoryManager';
 import { Toast } from './components/Toast';
 import {
   ShieldCheck,
@@ -28,12 +29,12 @@ const MainContent: React.FC = () => {
   const { activeTab, currentUser, isOwner } = useApp();
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-gray-100 flex flex-col font-sans selection:bg-[#38bdf8]/30 selection:text-white">
+    <div className="min-h-screen bg-[#0d1117] text-gray-100 flex flex-col font-sans selection:bg-[#38bdf8]/30 selection:text-white overflow-x-hidden w-full max-w-full">
       {/* Sticky Header */}
       <Header />
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-4 lg:p-6 space-y-6">
         {/* Render Tab Views */}
         {activeTab === 'board_triage' && <BoardLevelTriage />}
         {activeTab === 'networking' && <NetworkSysadminSuite />}
@@ -45,6 +46,7 @@ const MainContent: React.FC = () => {
         {activeTab === 'reference' && <BenchReference />}
         {activeTab === 'gemini' && <GeminiChatbot />}
         {activeTab === 'calendar' && <LabCalendar />}
+        {activeTab === 'assets' && <AssetInventoryManager />}
       </main>
 
       {/* Bench Station Status Footer */}

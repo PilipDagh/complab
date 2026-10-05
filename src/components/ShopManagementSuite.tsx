@@ -11,15 +11,23 @@ import {
   INITIAL_TOOL_LOANS,
   INITIAL_PARTS_INVENTORY,
   INITIAL_KANBAN_TICKETS,
+  INITIAL_LAPTOPS_CATALOG,
+  INITIAL_SAVED_COMBOS,
   INVENTORY_CATEGORIES,
   BenchStation,
   ToolLoanItem,
   InventoryItem,
   InventoryCategory,
   KanbanTicket,
+  SavedHardwareCombo,
+  LaptopAsset,
 } from '../data/shopManagementDatabase';
 import { InventoryAnalyticsDashboard } from './InventoryAnalyticsDashboard';
 import { InventoryBarcodeScannerModal } from './InventoryBarcodeScannerModal';
+import { BottleneckCalculator } from './BottleneckCalculator';
+import { HardwareCombosPlanner } from './HardwareCombosPlanner';
+import { LaptopFleetManager } from './LaptopFleetManager';
+import { AssetInventoryManager } from './AssetInventoryManager';
 import {
   LayoutGrid,
   QrCode,
@@ -68,6 +76,7 @@ import {
   ShieldAlert,
   Flame,
   Award,
+  Laptop,
 } from 'lucide-react';
 
 type Module4ToolId =
@@ -78,7 +87,11 @@ type Module4ToolId =
   | 'tool_loans'
   | 'weekly_summary'
   | 'kanban_dispatch'
-  | 'parts_inventory';
+  | 'parts_inventory'
+  | 'bottleneck_calc'
+  | 'hardware_combos'
+  | 'laptop_fleet'
+  | 'asset_inventory';
 
 export const ShopManagementSuite: React.FC = () => {
   const { currentUser, isOwner, addToast } = useApp();
@@ -183,6 +196,45 @@ export const ShopManagementSuite: React.FC = () => {
   const [stockStatusFilter, setStockStatusFilter] = useState<'ALL' | 'LOW' | 'IN_STOCK' | 'OUT'>('ALL');
   const [inventoryViewMode, setInventoryViewMode] = useState<'cards' | 'table' | 'compatibility_lab'>('cards');
   const [inventorySortBy, setInventorySortBy] = useState<'category' | 'name' | 'stock' | 'price'>('category');
+
+  // -------------------------------------------------------------
+  // Tool 4.9 & 4.10 State: Saved Hardware Combos & Build Planner
+  // -------------------------------------------------------------
+  const [savedCombos, setSavedCombos] = useState<SavedHardwareCombo[]>(() => {
+    const saved = localStorage.getItem('tradetech_saved_hardware_combos');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return INITIAL_SAVED_COMBOS;
+      }
+    }
+    return INITIAL_SAVED_COMBOS;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('tradetech_saved_hardware_combos', JSON.stringify(savedCombos));
+  }, [savedCombos]);
+
+  // -------------------------------------------------------------
+  // Tool 4.11 State: Laptop Fleet & Diagnostics Registry
+  // -------------------------------------------------------------
+  const [laptopFleet, setLaptopFleet] = useState<LaptopAsset[]>(() => {
+    const saved = localStorage.getItem('tradetech_laptop_fleet_registry');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.length >= INITIAL_LAPTOPS_CATALOG.length) return parsed;
+      } catch (e) {
+        return INITIAL_LAPTOPS_CATALOG;
+      }
+    }
+    return INITIAL_LAPTOPS_CATALOG;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('tradetech_laptop_fleet_registry', JSON.stringify(laptopFleet));
+  }, [laptopFleet]);
 
   // Barcode Scanner & D3 Analytics Modal State
   const [isBarcodeScannerModalOpen, setIsBarcodeScannerModalOpen] = useState<boolean>(false);
@@ -364,7 +416,7 @@ export const ShopManagementSuite: React.FC = () => {
   };
 
   // -------------------------------------------------------------
-  // Navigation for the 8 Shop Management Tools
+  // Navigation for the 11 Shop Management Tools
   // -------------------------------------------------------------
   const toolNav: { id: Module4ToolId; label: string; icon: React.ReactNode; badge: string }[] = [
     { id: 'bench_grid', label: '1. Live 16-Bench Grid & Capacity', icon: <LayoutGrid className="w-4 h-4" />, badge: '16 Benches' },
@@ -374,7 +426,11 @@ export const ShopManagementSuite: React.FC = () => {
     { id: 'tool_loans', label: '5. Equipment & Tool Loan Ledger', icon: <Wrench className="w-4 h-4" />, badge: 'Overdue Track' },
     { id: 'weekly_summary', label: '6. Automated Weekly Lab Summary', icon: <FileBarChart className="w-4 h-4" />, badge: 'Principal Report' },
     { id: 'kanban_dispatch', label: '7. Student Work Order Kanban', icon: <Kanban className="w-4 h-4" />, badge: '3 Stages' },
-    { id: 'parts_inventory', label: '8. Parts Inventory & Reorder Ledger', icon: <Package className="w-4 h-4" />, badge: 'Mouser/DigiKey' },
+    { id: 'parts_inventory', label: '8. Parts Inventory & Reorder Ledger', icon: <Package className="w-4 h-4" />, badge: `${inventory.length} Parts` },
+    { id: 'bottleneck_calc', label: '9. Bottleneck Calculator & Synergy', icon: <SlidersHorizontal className="w-4 h-4 text-cyan-400" />, badge: 'Gauge Chart' },
+    { id: 'hardware_combos', label: '10. Build Planner & Saved Part Combos', icon: <Layers className="w-4 h-4 text-emerald-400" />, badge: 'PDF Report' },
+    { id: 'laptop_fleet', label: '11. Laptop Fleet Registry & Triage', icon: <Laptop className="w-4 h-4 text-sky-400" />, badge: `${laptopFleet.length} Units` },
+    { id: 'asset_inventory', label: '12. Asset Inventory & Problem Marker', icon: <Tag className="w-4 h-4 text-teal-400" />, badge: 'Hardware Tracker' },
   ];
 
   const totalRubricScore =
@@ -2419,6 +2475,116 @@ export const ShopManagementSuite: React.FC = () => {
                 </button>
               </div>
             </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* TOOL 4.9: Bottleneck Calculator & Hardware Synergy Evaluator */}
+          {/* ======================================================== */}
+          {activeTool === 'bottleneck_calc' && (
+            <div className="bg-[#111827] border border-gray-800 rounded-2xl p-5 shadow-lg">
+              <BottleneckCalculator
+                inventory={inventory}
+                onSaveAsCombo={(combo) => {
+                  const newCombo: SavedHardwareCombo = {
+                    id: `combo_${Date.now()}`,
+                    name: `${combo.cpu?.name?.split(' ')[2] || 'Custom'} + ${combo.gpu?.name?.split(' ')[3] || 'GPU'} Balanced Rig`,
+                    category: 'Gaming Build',
+                    targetResolution: combo.resolution as any,
+                    targetWorkload: combo.workload,
+                    parts: [
+                      ...(combo.cpu ? [{ partId: combo.cpu.id, sku: combo.cpu.sku, name: combo.cpu.name, category: combo.cpu.category, unitCost: combo.cpu.unitCost, quantity: 1, tdpWatts: combo.cpu.tdpWatts, socket: combo.cpu.socket }] : []),
+                      ...(combo.gpu ? [{ partId: combo.gpu.id, sku: combo.gpu.sku, name: combo.gpu.name, category: combo.gpu.category, unitCost: combo.gpu.unitCost, quantity: 1, tdpWatts: combo.gpu.tdpWatts }] : []),
+                      ...(combo.ram ? [{ partId: combo.ram.id, sku: combo.ram.sku, name: combo.ram.name, category: combo.ram.category, unitCost: combo.ram.unitCost, quantity: 1 }] : []),
+                    ],
+                    totalCost: (combo.cpu?.unitCost || 0) + (combo.gpu?.unitCost || 0) + (combo.ram?.unitCost || 0),
+                    totalTdp: (combo.cpu?.tdpWatts || 105) + (combo.gpu?.tdpWatts || 220) + 75,
+                    recommendedPsu: Math.ceil((((combo.cpu?.tdpWatts || 105) + (combo.gpu?.tdpWatts || 220) + 75) * 1.35) / 50) * 50,
+                    bottleneckRating: {
+                      cpuScore: 90,
+                      gpuScore: 90,
+                      bottleneckPercent: combo.bottleneckPercent,
+                      mainBottleneck: combo.mainBottleneck,
+                      severity: combo.bottleneckPercent > 30 ? 'Severe' : combo.bottleneckPercent > 18 ? 'Noticeable' : combo.bottleneckPercent > 8 ? 'Mild' : 'Minimal',
+                    },
+                    dateCreated: new Date().toISOString(),
+                    dateUpdated: new Date().toISOString(),
+                    technicianName: currentUser?.displayName || 'Lead Technician',
+                  };
+                  setSavedCombos((prev) => [newCombo, ...prev]);
+                  setActiveTool('hardware_combos');
+                  addToast({
+                    type: 'success',
+                    title: 'Combo Transferred to Build Planner',
+                    message: `Transferred "${newCombo.name}" with evaluated synergy rating.`,
+                  });
+                }}
+              />
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* TOOL 4.10: Build Planner & Saved Hardware Combos with PDF Report */}
+          {/* ======================================================== */}
+          {activeTool === 'hardware_combos' && (
+            <div className="bg-[#111827] border border-gray-800 rounded-2xl p-5 shadow-lg">
+              <HardwareCombosPlanner
+                inventory={inventory}
+                savedCombos={savedCombos}
+                onSaveCombo={(combo) => {
+                  setSavedCombos((prev) => {
+                    const exists = prev.some((c) => c.id === combo.id);
+                    if (exists) {
+                      return prev.map((c) => (c.id === combo.id ? combo : c));
+                    }
+                    return [combo, ...prev];
+                  });
+                }}
+                onDeleteCombo={(comboId) => {
+                  setSavedCombos((prev) => prev.filter((c) => c.id !== comboId));
+                  addToast({
+                    type: 'info',
+                    title: 'Combo Deleted',
+                    message: 'Removed saved hardware combination from library.',
+                  });
+                }}
+              />
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* TOOL 4.11: Comprehensive Laptop Fleet & Diagnostic Registry */}
+          {/* ======================================================== */}
+          {activeTool === 'laptop_fleet' && (
+            <div className="bg-[#111827] border border-gray-800 rounded-2xl p-5 shadow-lg">
+              <LaptopFleetManager
+                laptops={laptopFleet}
+                onAssignToBench={(laptop, benchNumber) => {
+                  setLaptopFleet((prev) =>
+                    prev.map((l) => (l.id === laptop.id ? { ...l, status: 'Under Triage / Bench', assignedBench: benchNumber } : l))
+                  );
+                  // Also update bench station
+                  setBenchStations((prev) =>
+                    prev.map((b) =>
+                      b.number === benchNumber
+                        ? { ...b, status: 'Active Triage', activeDevice: `${laptop.model} (${laptop.assetTag})`, notes: `Triage: ${laptop.commonFaults}` }
+                        : b
+                    )
+                  );
+                }}
+                onUpdateLaptopStatus={(laptopId, status) => {
+                  setLaptopFleet((prev) =>
+                    prev.map((l) => (l.id === laptopId ? { ...l, status } : l))
+                  );
+                }}
+              />
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* TOOL 4.12: Hardware Asset Inventory & Problem Marker */}
+          {/* ======================================================== */}
+          {activeTool === 'asset_inventory' && (
+            <AssetInventoryManager />
           )}
         </div>
 

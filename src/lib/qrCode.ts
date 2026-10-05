@@ -1,9 +1,9 @@
 import QRCode from 'qrcode';
 
-export async function generateQrDataUrl(text: string): Promise<string> {
+export async function generateQrDataUrl(text: string, width: number = 256): Promise<string> {
   try {
     const dataUrl = await QRCode.toDataURL(text, {
-      width: 256,
+      width,
       margin: 2,
       color: {
         dark: '#000000',

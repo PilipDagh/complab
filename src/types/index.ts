@@ -1,4 +1,4 @@
-export type UserRole = 'ROLE_OWNER' | 'ROLE_STUDENT';
+export type UserRole = 'ROLE_OWNER' | 'ROLE_WORKER' | 'ROLE_STUDENT';
 
 export interface User {
   id: string;
@@ -8,6 +8,9 @@ export interface User {
   displayName: string;
   createdAt: string;
   benchStation?: string;
+  clockedIn?: boolean;
+  clockInTime?: string;
+  currentTask?: string;
 }
 
 export interface DiagnosticOption {
@@ -139,6 +142,15 @@ export interface AssetRepairLog {
   status: 'Resolved' | 'Parts Ordered' | 'Bench Testing' | 'Under Inspection';
 }
 
+export interface AssetProblemLabel {
+  hasProblem: boolean;
+  problemTitle?: string;
+  problemSeverity?: 'Critical' | 'Major' | 'Minor' | 'Diagnosing';
+  problemDescription?: string;
+  reportedDate?: string;
+  reportedBy?: string;
+}
+
 export interface HardwareAsset {
   id: string; // Document ID (usually assetTag, e.g., "AST-DELL-7090")
   assetTag: string; // e.g. "AST-DELL-7090"
@@ -148,6 +160,8 @@ export interface HardwareAsset {
   assignedBench: string;
   department: string;
   status: 'In Service' | 'Under Repair' | 'Decommissioned' | 'Bench Testing' | 'Spare Inventory';
+  isCurrentlyOnHand?: boolean; // Physical presence tracking: true if currently in lab / on bench
+  problemLabel?: AssetProblemLabel; // Problem marker and diagnostic symptom label
   specs: {
     cpu?: string;
     ram?: string;

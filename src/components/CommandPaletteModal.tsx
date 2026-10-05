@@ -18,6 +18,8 @@ import {
   Command,
   Terminal,
   Package,
+  Tag,
+  Users,
 } from 'lucide-react';
 
 interface ToolSearchItem {
@@ -228,6 +230,33 @@ const SEARCHABLE_TOOLS: ToolSearchItem[] = [
     icon: <LayoutGrid className="w-4 h-4 text-amber-400" />,
   },
   {
+    id: 'bottleneck_calc',
+    title: 'Hardware Bottleneck & Synergy Calculator',
+    subtitle: 'Interactive gauge chart for CPU/GPU bottleneck %, resolution scaling, and FPS estimation',
+    category: 'Module 4: Lab Management',
+    tab: 'lab_management',
+    keywords: ['bottleneck', 'calculator', 'gauge', 'cpu', 'gpu', 'fps', 'synergy', 'resolution', '1440p', '4k'],
+    icon: <LayoutGrid className="w-4 h-4 text-cyan-400" />,
+  },
+  {
+    id: 'hardware_combos',
+    title: 'Build Planner & Saved Hardware Combos',
+    subtitle: 'Design, save, balance, and export hardware part combinations as PDF specification reports',
+    category: 'Module 4: Lab Management',
+    tab: 'lab_management',
+    keywords: ['build planner', 'combos', 'combinations', 'saved builds', 'pdf export', 'bom', 'pc parts'],
+    icon: <LayoutGrid className="w-4 h-4 text-emerald-400" />,
+  },
+  {
+    id: 'laptop_fleet',
+    title: 'Comprehensive Laptop Fleet & Diagnostic Registry',
+    subtitle: 'Manage and triage 500+ commercial, workstation, and gaming laptops with battery health simulator',
+    category: 'Module 4: Lab Management',
+    tab: 'lab_management',
+    keywords: ['laptop', 'fleet', 'laptops', 'battery health', 'thinkpad', 'macbook', 'xps', 'triage', 'teardown'],
+    icon: <LayoutGrid className="w-4 h-4 text-sky-400" />,
+  },
+  {
     id: 'kanban_dispatch',
     title: 'Student Work Order Kanban Board',
     subtitle: 'Drag-and-drop repair job tickets across triage, in-progress, and QA',
@@ -341,6 +370,24 @@ const SEARCHABLE_TOOLS: ToolSearchItem[] = [
   },
 
   // Global Tools
+  {
+    id: 'assets_tracker',
+    title: 'Hardware Assets & Inventory Problem Marker',
+    subtitle: 'Track physical assets on hand, mark/flag problems, delete decommissioned units & add new hardware',
+    category: 'Global Assets',
+    tab: 'assets',
+    keywords: ['assets', 'inventory', 'hardware', 'mark problem', 'tag', 'on hand', 'adder', 'qr code', 'delete asset', 'specs'],
+    icon: <Tag className="w-4 h-4 text-teal-400" />,
+  },
+  {
+    id: 'quick_specs',
+    title: 'Quick Specs & CPU/RAM Compatibility Standards',
+    subtitle: 'Lookup AMD AM5/AM4, Intel LGA1700/1851, DDR5/DDR4 voltages, notch maps & A2/B2 slot rules',
+    category: 'Global Reference',
+    tab: 'reference',
+    keywords: ['quick specs', 'cpu socket', 'am5', 'am4', 'lga1700', 'lga1851', 'ddr5', 'ddr4', 'ram', 'notch', 'compatibility', 'expo', 'xmp'],
+    icon: <Cpu className="w-4 h-4 text-cyan-400" />,
+  },
   {
     id: 'diag_wizard',
     title: 'Interactive Diagnostic Engine (Wizard)',

@@ -8,11 +8,13 @@
  * - LocalStorage persistence for diagnostic history
  */
 
+import { UserRole } from '../types';
+
 export interface ModuleAiRequestOptions {
   moduleName: string;
   toolName: string;
   inputPayload: Record<string, any> | string;
-  userRole?: 'ROLE_OWNER' | 'ROLE_STUDENT';
+  userRole?: UserRole;
   customPrompt?: string;
   image?: {
     data: string; // base64 without prefix

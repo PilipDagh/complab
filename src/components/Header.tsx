@@ -29,6 +29,8 @@ import {
   Menu,
   X,
   Boxes,
+  Users,
+  Tag,
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -41,6 +43,8 @@ export const Header: React.FC = () => {
     users,
     switchUserQuick,
     setIsAuthModalOpen,
+    openAuthModal,
+    hardwareAssets,
     setIsScannerModalOpen,
   } = useApp();
 
@@ -273,20 +277,38 @@ export const Header: React.FC = () => {
               </span>
             </button>
 
-            {/* 6. Lab Calendar (Owner Only) */}
-            {isOwner && (
-              <button
-                onClick={() => setActiveTab('calendar')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                  activeTab === 'calendar'
-                    ? 'bg-[#21262d] text-white shadow-sm border border-[#30363d] text-amber-400'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#21262d]/50'
-                }`}
-              >
-                <Calendar className="w-3.5 h-3.5 text-amber-400" />
-                <span>Calendar</span>
-              </button>
-            )}
+            {/* 6. Lab Calendar & Workstation Clock-In */}
+            <button
+              onClick={() => setActiveTab('calendar')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                activeTab === 'calendar'
+                  ? 'bg-[#21262d] text-white shadow-sm border border-[#30363d] text-amber-400'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#21262d]/50'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5 text-amber-400" />
+              <span>Calendar</span>
+              {currentUser?.clockedIn && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Clocked In"></span>
+              )}
+            </button>
+
+            {/* 7. Hardware Assets & Inventory Tracker */}
+            <button
+              onClick={() => setActiveTab('assets')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                activeTab === 'assets'
+                  ? 'bg-[#21262d] text-white shadow-sm border border-[#30363d] text-teal-300'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#21262d]/50'
+              }`}
+              title="Track on-hand assets, mark problems & manage inventory"
+            >
+              <Tag className="w-3.5 h-3.5 text-teal-400" />
+              <span>Assets</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                {hardwareAssets.length}
+              </span>
+            </button>
           </nav>
 
           {/* Right: Quick Command Search + QR Scanner + User Profile + Mobile Hamburger */}
@@ -323,98 +345,172 @@ export const Header: React.FC = () => {
               {isMobileMenuOpen ? <X className="w-4 h-4 text-cyan-400" /> : <Menu className="w-4 h-4" />}
             </button>
 
-            {/* Top-Right Auth Dropdown */}
+            {/* Top-Right Auth Dropdown & Profile Picker */}
             {currentUser ? (
-              <div className="relative">
+              <div className="flex items-center gap-1.5">
+                {/* Profile Switcher button in login area */}
                 <button
-                  onClick={() => setShowUserDropdown(!showUserDropdown)}
-                  className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-[#161b22] border border-[#30363d] hover:border-gray-500 text-left transition-all"
+                  onClick={() => openAuthModal('profiles_menu')}
+                  className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] hover:border-cyan-500/50 text-cyan-400 hover:text-cyan-300 text-xs font-mono transition-colors shadow-sm"
+                  title="Switch to another technician profile"
                 >
-                  <div
-                    className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold ${
-                      isOwner
-                        ? 'bg-gradient-to-br from-[#2ea043] to-[#238636] text-white shadow-sm'
-                        : 'bg-gradient-to-br from-[#38bdf8] to-blue-700 text-white'
-                    }`}
-                  >
-                    {currentUser.displayName.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="hidden sm:block">
-                    <span className="text-xs font-medium text-gray-200 block leading-tight">
-                      {currentUser.displayName.split(' ')[0]}
-                    </span>
-                  </div>
-                  <ChevronDown className="w-3 h-3 text-gray-400" />
+                  <Users className="w-3.5 h-3.5" />
+                  <span className="hidden xl:inline text-[11px]">Profiles</span>
+                  <span className="px-1.5 py-0.2 rounded text-[10px] bg-cyan-500/20 text-cyan-300 font-mono">
+                    {users.length}
+                  </span>
                 </button>
 
-                {/* User Profile Menu */}
-                {showUserDropdown && (
-                  <div
-                    className="absolute right-0 mt-2 w-64 rounded-xl bg-[#161b22] border border-[#30363d] shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-100"
-                    onClick={() => setShowUserDropdown(false)}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowUserDropdown(!showUserDropdown)}
+                    className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-[#161b22] border border-[#30363d] hover:border-gray-500 text-left transition-all"
                   >
-                    <div className="px-3 py-2 border-b border-[#30363d] mb-1">
-                      <p className="text-xs font-semibold text-white">{currentUser.displayName}</p>
-                      <p className="text-[11px] text-gray-400 font-mono truncate">@{currentUser.username}</p>
-                      <div className="mt-1 flex items-center gap-1 text-[10px] text-emerald-400 font-mono">
-                        <ShieldCheck className="w-3 h-3" />
-                        Role: {isOwner ? 'Lead Instructor (Owner)' : 'Bench Tech (Student)'}
+                    <div
+                      className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold ${
+                        isOwner
+                          ? 'bg-gradient-to-br from-[#2ea043] to-[#238636] text-white shadow-sm'
+                          : 'bg-gradient-to-br from-[#38bdf8] to-blue-700 text-white'
+                      }`}
+                    >
+                      {currentUser.displayName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="hidden sm:block">
+                      <span className="text-xs font-medium text-gray-200 block leading-tight">
+                        {currentUser.displayName.split(' ')[0]}
+                      </span>
+                    </div>
+                    <ChevronDown className="w-3 h-3 text-gray-400" />
+                  </button>
+
+                  {/* User Profile Menu */}
+                  {showUserDropdown && (
+                    <div
+                      className="absolute right-0 mt-2 w-64 rounded-xl bg-[#161b22] border border-[#30363d] shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-100"
+                      onClick={() => setShowUserDropdown(false)}
+                    >
+                      <div className="px-3 py-2 border-b border-[#30363d] mb-1">
+                        <p className="text-xs font-semibold text-white">{currentUser.displayName}</p>
+                        <p className="text-[11px] text-gray-400 font-mono truncate">@{currentUser.username}</p>
+                        <div className="mt-1 flex items-center gap-1 text-[10px] text-emerald-400 font-mono">
+                          <ShieldCheck className="w-3 h-3" />
+                          Role: {isOwner ? '👑 Master Admin (Lead)' : '🛠️ Workstation Tech (Worker)'}
+                        </div>
+                      </div>
+
+                      <div className="py-1">
+                        <div className="flex items-center justify-between px-2 mb-1">
+                          <p className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">
+                            Switch Profile:
+                          </p>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowUserDropdown(false);
+                              openAuthModal('profiles_menu');
+                            }}
+                            className="text-[10px] font-mono text-cyan-400 hover:text-cyan-300 hover:underline flex items-center gap-0.5"
+                          >
+                            <span>All ({users.length})</span>
+                            <span>→</span>
+                          </button>
+                        </div>
+                        <div className="max-h-44 overflow-y-auto space-y-0.5 custom-scrollbar pr-1">
+                          {users.map((u) => (
+                            <button
+                              key={u.id}
+                              onClick={() => switchUserQuick(u.id)}
+                              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
+                                u.id === currentUser.id
+                                  ? 'bg-[#21262d] text-white font-medium'
+                                  : 'text-gray-300 hover:bg-[#21262d]/50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 truncate">
+                                <span className="truncate">{u.displayName}</span>
+                                {u.benchStation && (
+                                  <span className="text-[9px] text-gray-500 font-mono">({u.benchStation.replace('Bench ', 'B')})</span>
+                                )}
+                              </div>
+                              <span
+                                className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
+                                  u.role === 'ROLE_OWNER'
+                                    ? 'bg-emerald-500/20 text-[#2ea043] border border-emerald-500/30'
+                                    : 'bg-sky-500/20 text-[#38bdf8] border border-sky-500/30'
+                                }`}
+                              >
+                                {u.role === 'ROLE_OWNER' ? 'Admin' : 'Worker'}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="border-t border-[#30363d] pt-1 mt-1 space-y-0.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowUserDropdown(false);
+                            openAuthModal('profiles_menu');
+                          }}
+                          className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-cyan-300 hover:text-white hover:bg-[#21262d] rounded-lg transition-colors font-mono"
+                        >
+                          <Users className="w-3.5 h-3.5 text-cyan-400" />
+                          Browse Profiles Menu ({users.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowUserDropdown(false);
+                            openAuthModal('signup');
+                          }}
+                          className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-gray-300 hover:text-white hover:bg-[#21262d] rounded-lg transition-colors font-mono"
+                        >
+                          <UserCheck className="w-3.5 h-3.5 text-blue-400" />
+                          Register New Account
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowUserDropdown(false);
+                            logoutUser();
+                          }}
+                          className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-red-400 hover:bg-red-500/10 rounded-lg transition-colors font-mono"
+                        >
+                          <LogOut className="w-3.5 h-3.5" />
+                          Sign Out
+                        </button>
                       </div>
                     </div>
-
-                    <div className="py-1">
-                      <p className="px-2 text-[10px] font-mono text-gray-400 uppercase tracking-wider mb-1">
-                        Switch Profile:
-                      </p>
-                      {users.map((u) => (
-                        <button
-                          key={u.id}
-                          onClick={() => switchUserQuick(u.id)}
-                          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
-                            u.id === currentUser.id
-                              ? 'bg-[#21262d] text-white font-medium'
-                              : 'text-gray-300 hover:bg-[#21262d]/50'
-                          }`}
-                        >
-                          <span className="truncate">{u.displayName}</span>
-                          <span
-                            className={`text-[9px] font-mono px-1 rounded ${
-                              u.role === 'ROLE_OWNER' ? 'text-[#2ea043]' : 'text-[#38bdf8]'
-                            }`}
-                          >
-                            {u.role === 'ROLE_OWNER' ? 'Owner' : 'Student'}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="border-t border-[#30363d] pt-1 mt-1">
-                      <button
-                        onClick={() => setIsAuthModalOpen(true)}
-                        className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-gray-300 hover:text-white hover:bg-[#21262d] rounded-lg transition-colors"
-                      >
-                        <UserCheck className="w-3.5 h-3.5 text-blue-400" />
-                        Switch / Register Account
-                      </button>
-                      <button
-                        onClick={logoutUser}
-                        className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                      >
-                        <LogOut className="w-3.5 h-3.5" />
-                        Sign Out
-                      </button>
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             ) : (
-              <button
-                onClick={() => setIsAuthModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition-colors"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Sign In</span>
-              </button>
+              <div className="flex items-center gap-1.5">
+                {/* Dedicated Profile button in login area */}
+                <button
+                  onClick={() => openAuthModal('profiles_menu')}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#161b22] hover:bg-[#21262d] border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 hover:text-white text-xs font-mono transition-all shadow-sm group"
+                  title="Switch to technician profile (Julian, Kylin, Jason, Tristan, Xaiver, Remington, Katrina, Bridget)"
+                >
+                  <Users className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform" />
+                  <span>Profiles</span>
+                  <span className="px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-mono border border-cyan-500/30">
+                    {users.length}
+                  </span>
+                </button>
+                <button
+                  onClick={() => openAuthModal('login')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition-colors"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Sign In</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -486,22 +582,46 @@ export const Header: React.FC = () => {
                 <span>Parts ({INITIAL_PARTS_INVENTORY.length})</span>
               </button>
 
-              {isOwner && (
-                <button
-                  onClick={() => {
-                    setActiveTab('calendar');
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className={`flex items-center gap-2 p-2 rounded-lg border text-left col-span-2 ${
-                    activeTab === 'calendar'
-                      ? 'bg-amber-950/40 border-amber-500/50 text-amber-300 font-bold'
-                      : 'bg-gray-900 border-gray-800 text-gray-300 hover:text-white'
-                  }`}
-                >
-                  <Calendar className="w-4 h-4 text-amber-400" />
-                  <span>Lab Calendar & Daily Activity</span>
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  setActiveTab('calendar');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex items-center gap-2 p-2 rounded-lg border text-left col-span-2 ${
+                  activeTab === 'calendar'
+                    ? 'bg-amber-950/40 border-amber-500/50 text-amber-300 font-bold'
+                    : 'bg-gray-900 border-gray-800 text-gray-300 hover:text-white'
+                }`}
+              >
+                <Calendar className="w-4 h-4 text-amber-400" />
+                <span>Lab Calendar & Workstation Clock-In</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab('assets');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex items-center gap-2 p-2 rounded-lg border text-left col-span-2 ${
+                  activeTab === 'assets'
+                    ? 'bg-teal-950/40 border-teal-500/50 text-teal-300 font-bold'
+                    : 'bg-gray-900 border-gray-800 text-gray-300 hover:text-white'
+                }`}
+              >
+                <Tag className="w-4 h-4 text-teal-400" />
+                <span>Assets & Inventory Tracker ({hardwareAssets.length})</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  openAuthModal('profiles_menu');
+                  setIsMobileMenuOpen(false);
+                }}
+                className="flex items-center justify-center gap-2 p-2.5 rounded-lg border border-cyan-500/40 bg-gradient-to-r from-cyan-950/60 to-blue-950/60 text-cyan-300 hover:text-white text-xs font-mono font-bold col-span-2 shadow-sm"
+              >
+                <Users className="w-4 h-4 text-cyan-400" />
+                <span>Technician Profiles ({users.length} Available)</span>
+              </button>
             </div>
 
             <div className="text-[11px] font-mono text-gray-400 uppercase tracking-wider pt-2 border-t border-gray-800">
