@@ -14,6 +14,7 @@ import { ShopManagementSuite } from './components/ShopManagementSuite';
 import { ForensicRecoverySuite } from './components/ForensicRecoverySuite';
 import { SignalIntegritySuite } from './components/SignalIntegritySuite';
 import { AssetInventoryManager } from './components/AssetInventoryManager';
+import { TechnicianTimeClockSuite } from './components/TechnicianTimeClockSuite';
 import { Toast } from './components/Toast';
 import {
   ShieldCheck,
@@ -47,6 +48,7 @@ const MainContent: React.FC = () => {
         {activeTab === 'gemini' && <GeminiChatbot />}
         {activeTab === 'calendar' && <LabCalendar />}
         {activeTab === 'assets' && <AssetInventoryManager />}
+        {activeTab === 'time_clock' && <TechnicianTimeClockSuite />}
       </main>
 
       {/* Bench Station Status Footer */}

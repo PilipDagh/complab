@@ -8,6 +8,8 @@ import {
   DiagnosticNode,
   HardwareAsset,
   AssetRepairLog,
+  TimeClockEntry,
+  TimeClockTaskCategory,
 } from '../types';
 import {
   INITIAL_USERS,
@@ -15,6 +17,7 @@ import {
   INITIAL_CALENDAR_LOGS,
   INITIAL_PROJECT_WORK_ORDERS,
   INITIAL_HARDWARE_ASSETS,
+  INITIAL_TIME_CLOCK_ENTRIES,
 } from '../data/seedData';
 import { auth, googleAuthProvider } from '../lib/firebase.ts';
 import {
@@ -53,7 +56,8 @@ export type AppTab =
   | 'reference'
   | 'gemini'
   | 'calendar'
-  | 'assets';
+  | 'assets'
+  | 'time_clock';
 
 export interface ToastMessage {
   id: string;
@@ -135,6 +139,28 @@ interface AppContextType {
   addAssetRepairLog: (assetId: string, log: Omit<AssetRepairLog, 'id' | 'date'>) => Promise<void>;
   deleteHardwareAsset: (assetId: string) => Promise<void>;
 
+  // Time Clock & Shift Task Logs
+  timeClockEntries: TimeClockEntry[];
+  clockInTechnician: (
+    userId: string,
+    benchStation: string,
+    taskCategory: TimeClockTaskCategory,
+    workAccomplishments: string,
+    photoUrls?: string[]
+  ) => Promise<void>;
+  clockOutTechnician: (
+    userId: string,
+    workAccomplishments?: string,
+    photoUrls?: string[]
+  ) => Promise<void>;
+  toggleTechnicianBreak: (userId: string) => Promise<void>;
+  addShiftPhotos: (userId: string, newPhotoUrls: string[]) => Promise<void>;
+  addManualTimeLog: (entry: Omit<TimeClockEntry, 'id'>) => Promise<void>;
+  deleteTimeLog: (id: string) => Promise<void>;
+  updateTimeLog: (id: string, updates: Partial<TimeClockEntry>) => Promise<void>;
+  exportTimesheetsCsv: (technicianId?: string, startDate?: string, endDate?: string) => void;
+
+
   // Toast
   toasts: ToastMessage[];
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
@@ -163,6 +189,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [hardwareAssets, setHardwareAssets] = useState<HardwareAsset[]>(INITIAL_HARDWARE_ASSETS);
   const [activeScannedAsset, setActiveScannedAsset] = useState<HardwareAsset | null>(null);
   const [isScannerModalOpen, setIsScannerModalOpen] = useState<boolean>(false);
+
+  // Time Clock & Shift Task Logs State
+  const [timeClockEntries, setTimeClockEntries] = useState<TimeClockEntry[]>(INITIAL_TIME_CLOCK_ENTRIES);
 
   // Toast System
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -1075,6 +1104,318 @@ Previous Repairs: ${activeScannedAsset.repairHistory.map((r) => `[${r.date}] ${r
     return report;
   };
 
+  // Time Clock & Shift Task Methods
+  const clockInTechnician = async (
+    userId: string,
+    benchStation: string,
+    taskCategory: TimeClockTaskCategory,
+    workAccomplishments: string,
+    photoUrls?: string[]
+  ) => {
+    const techUser = users.find((u) => u.id === userId);
+    const techName = techUser?.displayName || 'Technician';
+    const nowIso = new Date().toISOString();
+    const todayDate = nowIso.split('T')[0];
+
+    // Close any previous active entries for this user
+    setTimeClockEntries((prev) =>
+      prev.map((e) => {
+        if (e.userId === userId && e.status === 'active') {
+          let breakTotal = e.breakMinutes || 0;
+          if (e.isPaused && e.breakStartTime) {
+            const addedBreak = Math.max(1, Math.round((new Date(nowIso).getTime() - new Date(e.breakStartTime).getTime()) / 60000));
+            breakTotal += addedBreak;
+          }
+          const gross = Math.max(1, Math.round((new Date(nowIso).getTime() - new Date(e.clockIn).getTime()) / 60000));
+          const net = Math.max(0, gross - breakTotal);
+          return {
+            ...e,
+            status: 'completed',
+            clockOut: nowIso,
+            isPaused: false,
+            breakStartTime: undefined,
+            breakMinutes: breakTotal,
+            grossDurationMinutes: gross,
+            durationMinutes: net,
+          };
+        }
+        return e;
+      })
+    );
+
+    const newEntry: TimeClockEntry = {
+      id: `tc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      userId,
+      technicianName: techName,
+      userRole: techUser?.role || 'ROLE_WORKER',
+      benchStation,
+      clockIn: nowIso,
+      durationMinutes: 0,
+      grossDurationMinutes: 0,
+      breakMinutes: 0,
+      isPaused: false,
+      photoUrls: photoUrls || [],
+      taskCategory,
+      workAccomplishments: workAccomplishments || `Active bench operations at ${benchStation}`,
+      status: 'active',
+      date: todayDate,
+    };
+
+    setTimeClockEntries((prev) => [newEntry, ...prev]);
+
+    // Update workstation & clocked in status
+    await updateUserWorkstation(userId, benchStation, workAccomplishments || taskCategory, true);
+
+    addToast({
+      type: 'success',
+      title: `${techName} Clocked In`,
+      message: `Shift active at ${benchStation} (${taskCategory}).`,
+    });
+  };
+
+  const toggleTechnicianBreak = async (userId: string) => {
+    const techUser = users.find((u) => u.id === userId);
+    const techName = techUser?.displayName || 'Technician';
+    const nowIso = new Date().toISOString();
+
+    let wasPaused = false;
+    let newlyPaused = false;
+
+    setTimeClockEntries((prev) =>
+      prev.map((e) => {
+        if (e.userId === userId && e.status === 'active') {
+          if (e.isPaused) {
+            // Resuming from break
+            wasPaused = true;
+            const breakElapsed = e.breakStartTime
+              ? Math.max(1, Math.round((new Date(nowIso).getTime() - new Date(e.breakStartTime).getTime()) / 60000))
+              : 0;
+            const updatedBreakMinutes = (e.breakMinutes || 0) + breakElapsed;
+            return {
+              ...e,
+              isPaused: false,
+              breakStartTime: undefined,
+              breakMinutes: updatedBreakMinutes,
+            };
+          } else {
+            // Taking a break
+            newlyPaused = true;
+            return {
+              ...e,
+              isPaused: true,
+              breakStartTime: nowIso,
+            };
+          }
+        }
+        return e;
+      })
+    );
+
+    if (newlyPaused) {
+      addToast({
+        type: 'warning',
+        title: `${techName} Paused on Break`,
+        message: 'Main bench work timer paused. Break time is now being logged.',
+      });
+    } else if (wasPaused) {
+      addToast({
+        type: 'success',
+        title: `${techName} Resumed Work`,
+        message: 'Break logged. Active bench work timer resumed.',
+      });
+    }
+  };
+
+  const addShiftPhotos = async (userId: string, newPhotoUrls: string[]) => {
+    if (!newPhotoUrls.length) return;
+    setTimeClockEntries((prev) =>
+      prev.map((e) => {
+        if (e.userId === userId && e.status === 'active') {
+          return {
+            ...e,
+            photoUrls: [...(e.photoUrls || []), ...newPhotoUrls],
+          };
+        }
+        return e;
+      })
+    );
+    addToast({
+      type: 'success',
+      title: 'Work Photos Attached',
+      message: `Added ${newPhotoUrls.length} work proof photo(s) to active shift.`,
+    });
+  };
+
+  const clockOutTechnician = async (
+    userId: string,
+    accomplishmentsUpdate?: string,
+    photoUrls?: string[]
+  ) => {
+    const techUser = users.find((u) => u.id === userId);
+    const techName = techUser?.displayName || 'Technician';
+    const nowIso = new Date().toISOString();
+
+    let loggedNetMinutes = 0;
+    let loggedBreakMinutes = 0;
+    let loggedGrossMinutes = 0;
+
+    setTimeClockEntries((prev) =>
+      prev.map((e) => {
+        if (e.userId === userId && e.status === 'active') {
+          let totalBreak = e.breakMinutes || 0;
+          if (e.isPaused && e.breakStartTime) {
+            const extraBreak = Math.max(1, Math.round((new Date(nowIso).getTime() - new Date(e.breakStartTime).getTime()) / 60000));
+            totalBreak += extraBreak;
+          }
+          const grossMins = Math.max(1, Math.round((new Date(nowIso).getTime() - new Date(e.clockIn).getTime()) / 60000));
+          const netMins = Math.max(0, grossMins - totalBreak);
+
+          loggedGrossMinutes = grossMins;
+          loggedBreakMinutes = totalBreak;
+          loggedNetMinutes = netMins;
+
+          const mergedPhotos = [
+            ...(e.photoUrls || []),
+            ...(photoUrls || []),
+          ];
+
+          return {
+            ...e,
+            clockOut: nowIso,
+            grossDurationMinutes: grossMins,
+            breakMinutes: totalBreak,
+            durationMinutes: netMins,
+            isPaused: false,
+            breakStartTime: undefined,
+            status: 'completed',
+            photoUrls: mergedPhotos,
+            workAccomplishments: accomplishmentsUpdate?.trim()
+              ? accomplishmentsUpdate.trim()
+              : e.workAccomplishments,
+          };
+        }
+        return e;
+      })
+    );
+
+    await updateUserWorkstation(userId, techUser?.benchStation || 'Unassigned', 'Shift Completed', false);
+
+    const netHours = (loggedNetMinutes / 60).toFixed(1);
+    addToast({
+      type: 'info',
+      title: `${techName} Clocked Out`,
+      message: `Shift ended: ${loggedNetMinutes} mins net work (~${netHours}h) | ${loggedBreakMinutes} mins break recorded.`,
+    });
+  };
+
+  const addManualTimeLog = async (entry: Omit<TimeClockEntry, 'id'>) => {
+    const newEntry: TimeClockEntry = {
+      ...entry,
+      id: `tc_manual_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      status: 'completed',
+      grossDurationMinutes: entry.grossDurationMinutes || (entry.durationMinutes + (entry.breakMinutes || 0)),
+    };
+
+    setTimeClockEntries((prev) => [newEntry, ...prev]);
+
+    addToast({
+      type: 'success',
+      title: 'Shift Logged',
+      message: `Recorded ${entry.durationMinutes} mins net work (${entry.breakMinutes || 0} mins break) for ${entry.technicianName} on ${entry.date}.`,
+    });
+  };
+
+  const deleteTimeLog = async (id: string) => {
+    setTimeClockEntries((prev) => prev.filter((e) => e.id !== id));
+    addToast({
+      type: 'warning',
+      title: 'Time Log Removed',
+      message: 'Timesheet record removed successfully.',
+    });
+  };
+
+  const updateTimeLog = async (id: string, updates: Partial<TimeClockEntry>) => {
+    setTimeClockEntries((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, ...updates } : e))
+    );
+    addToast({
+      type: 'info',
+      title: 'Time Log Updated',
+      message: 'Timesheet entry updated successfully.',
+    });
+  };
+
+  const exportTimesheetsCsv = (technicianId?: string, startDate?: string, endDate?: string) => {
+    let filtered = [...timeClockEntries];
+    if (technicianId && technicianId !== 'ALL') {
+      filtered = filtered.filter((e) => e.userId === technicianId);
+    }
+    if (startDate) {
+      filtered = filtered.filter((e) => e.date >= startDate);
+    }
+    if (endDate) {
+      filtered = filtered.filter((e) => e.date <= endDate);
+    }
+
+    const headers = [
+      'ID',
+      'Date',
+      'Technician',
+      'Role',
+      'Bench Station',
+      'Clock In',
+      'Clock Out',
+      'Net Work Duration (Minutes)',
+      'Net Work Duration (Hours)',
+      'Break Duration (Minutes)',
+      'Total Shift Duration (Minutes)',
+      'Task Category',
+      'Work Accomplishments',
+      'Parts Used',
+      'Proof Photos Count',
+      'Status',
+    ];
+
+    const rows = filtered.map((e) => {
+      const gross = e.grossDurationMinutes ?? (e.durationMinutes + (e.breakMinutes || 0));
+      return [
+        `"${e.id}"`,
+        `"${e.date}"`,
+        `"${e.technicianName}"`,
+        `"${e.userRole}"`,
+        `"${e.benchStation}"`,
+        `"${e.clockIn}"`,
+        `"${e.clockOut || 'ACTIVE'}"`,
+        e.durationMinutes,
+        (e.durationMinutes / 60).toFixed(2),
+        e.breakMinutes || 0,
+        gross,
+        `"${e.taskCategory}"`,
+        `"${(e.workAccomplishments || '').replace(/"/g, '""')}"`,
+        `"${(e.partsReplacedOrUsed || []).join('; ')}"`,
+        e.photoUrls?.length || 0,
+        `"${e.status}"`,
+      ];
+    });
+
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `TradeTech_Timesheet_Export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    addToast({
+      type: 'success',
+      title: 'Timesheet Exported',
+      message: `Exported ${filtered.length} shift logs to CSV.`,
+    });
+  };
+
+
   return (
     <AppContext.Provider
       value={{
@@ -1141,6 +1482,16 @@ Previous Repairs: ${activeScannedAsset.repairHistory.map((r) => `[${r.date}] ${r
         saveHardwareAsset,
         addAssetRepairLog,
         deleteHardwareAsset,
+
+        timeClockEntries,
+        clockInTechnician,
+        clockOutTechnician,
+        toggleTechnicianBreak,
+        addShiftPhotos,
+        addManualTimeLog,
+        deleteTimeLog,
+        updateTimeLog,
+        exportTimesheetsCsv,
 
         toasts,
         addToast,

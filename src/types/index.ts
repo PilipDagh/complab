@@ -182,3 +182,44 @@ export interface HardwareAsset {
   updatedAt: string;
   authorUid?: string;
 }
+
+export type TimeClockTaskCategory =
+  | 'Diagnostics & Triage'
+  | 'SMD Rework & Soldering'
+  | 'Thermal Repasting & Assembly'
+  | 'OS Deployment & Drivers'
+  | 'Network Cabling & Switches'
+  | 'Laptop Teardown & Battery'
+  | 'Lab Supervision & Safety'
+  | 'General Bench Work';
+
+export interface RepairTaskPreset {
+  id: string;
+  label: string;
+  category: TimeClockTaskCategory;
+  description: string;
+  partsHint?: string[];
+  estimatedMinutes?: number;
+}
+
+export interface TimeClockEntry {
+  id: string;
+  userId: string;
+  technicianName: string;
+  userRole: UserRole;
+  benchStation: string;
+  clockIn: string; // ISO string
+  clockOut?: string; // ISO string
+  durationMinutes: number; // Net active work time in minutes
+  grossDurationMinutes?: number; // Total shift duration (net work + break)
+  breakMinutes?: number; // Total cumulative break / paused minutes
+  isPaused?: boolean; // True if currently on break
+  breakStartTime?: string; // ISO string of when active break started
+  photoUrls?: string[]; // Visual work proof images / photos taken today
+  taskCategory: TimeClockTaskCategory;
+  workAccomplishments: string; // What was performed during the shift
+  partsReplacedOrUsed?: string[];
+  status: 'active' | 'completed';
+  date: string; // YYYY-MM-DD
+}
+

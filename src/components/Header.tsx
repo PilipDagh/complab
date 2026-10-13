@@ -31,6 +31,7 @@ import {
   Boxes,
   Users,
   Tag,
+  Clock,
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -45,6 +46,7 @@ export const Header: React.FC = () => {
     setIsAuthModalOpen,
     openAuthModal,
     hardwareAssets,
+    timeClockEntries,
     setIsScannerModalOpen,
   } = useApp();
 
@@ -308,6 +310,23 @@ export const Header: React.FC = () => {
               <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30">
                 {hardwareAssets.length}
               </span>
+            </button>
+
+            {/* 8. Technician Time Clock & Activity Logger */}
+            <button
+              onClick={() => setActiveTab('time_clock')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                activeTab === 'time_clock'
+                  ? 'bg-[#21262d] text-white shadow-sm border border-[#30363d] text-emerald-300'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#21262d]/50'
+              }`}
+              title="Punch in/out, log shift tasks & view timesheets"
+            >
+              <Clock className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Time Clock</span>
+              {currentUser?.clockedIn && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Currently Clocked In"></span>
+              )}
             </button>
           </nav>
 
@@ -610,6 +629,21 @@ export const Header: React.FC = () => {
               >
                 <Tag className="w-4 h-4 text-teal-400" />
                 <span>Assets & Inventory Tracker ({hardwareAssets.length})</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab('time_clock');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex items-center gap-2 p-2 rounded-lg border text-left col-span-2 ${
+                  activeTab === 'time_clock'
+                    ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300 font-bold'
+                    : 'bg-gray-900 border-gray-800 text-gray-300 hover:text-white'
+                }`}
+              >
+                <Clock className="w-4 h-4 text-emerald-400" />
+                <span>Technician Time Clock & Activity Logger</span>
               </button>
 
               <button

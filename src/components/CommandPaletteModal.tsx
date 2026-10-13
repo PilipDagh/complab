@@ -20,6 +20,7 @@ import {
   Package,
   Tag,
   Users,
+  Clock,
 } from 'lucide-react';
 
 interface ToolSearchItem {
@@ -423,6 +424,15 @@ const SEARCHABLE_TOOLS: ToolSearchItem[] = [
     tab: 'calendar',
     keywords: ['calendar', 'projects', 'work orders', 'schedule', 'appointments', 'owner'],
     icon: <Calendar className="w-4 h-4 text-amber-400" />,
+  },
+  {
+    id: 'time_clock',
+    title: 'Technician Time Clock & Activity Logger',
+    subtitle: 'Digital punch clock, station allocation, shift task accomplishments, and weekly timesheet reports',
+    category: 'Workstation & Floor',
+    tab: 'time_clock',
+    keywords: ['time clock', 'clock in', 'clock out', 'punch', 'hours', 'timesheet', 'shift', 'tasks', 'activity', 'julian', 'workers'],
+    icon: <Clock className="w-4 h-4 text-emerald-400" />,
   },
 ];
 
