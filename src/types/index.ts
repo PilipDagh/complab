@@ -223,3 +223,89 @@ export interface TimeClockEntry {
   date: string; // YYYY-MM-DD
 }
 
+// --- COMLAB STATUS & AERIAL ROOM TYPES ---
+
+export type ComLabStatusLevel = 'green' | 'orange' | 'red' | 'unconfigured';
+export type ComLabPowerState = 'powered_on' | 'standby' | 'powered_off' | 'no_power_cable' | 'unplugged';
+
+export interface ComLabHardwareComponents {
+  hasParts: boolean; // false for C4 (ZERO parts inside)
+  cpu?: string;
+  ram?: string;
+  storage?: string;
+  gpu?: string;
+  motherboard?: string;
+  powerSupply?: string;
+  cpuCooler?: string;
+  display?: string;
+  missingPartsDescription?: string;
+}
+
+export interface ComLabTelemetryData {
+  ipAddress?: string;
+  macAddress?: string;
+  hostname?: string;
+  os?: string;
+  cpuTempCelsius?: number;
+  ramUsagePercent?: number;
+  diskHealth?: 'Healthy' | 'Warning' | 'Failing' | 'Missing';
+  lastPing?: string;
+  agentVersion?: string;
+  agentOnline?: boolean;
+}
+
+export interface ComLabTelemetryPayload {
+  pc_id: string; // "C4" or "pc_C_4"
+  status: 'BLINKING_RED' | 'RED' | 'ORANGE' | 'GREEN' | 'BLANK' | 'UNCONFIGURED';
+  power_connected: boolean;
+  ethernet_connected?: boolean;
+  hardware_detected: {
+    cpu?: string | null;
+    ram_gb?: number;
+    storage_count?: number;
+    gpu?: string | null;
+    motherboard?: string | null;
+    power_supply?: string | null;
+    cpu_cooler?: string | null;
+  };
+  alert_message?: string;
+  notes?: string;
+}
+
+export interface ComLabWorkstation {
+  id: string; // e.g. "pc_A_1", "pc_C_4"
+  rowId: string; // "A", "B", "C", "D"
+  rowLabel: string; // "Row A"
+  slotNumber: number; // 1, 2, 3, 4 (numbered right-to-left: 1 on right, 4 on left)
+  displayName: string; // "PC C4"
+  statusLevel: ComLabStatusLevel; // 'red' (blinking), 'orange', 'green', 'unconfigured'
+  powerState: ComLabPowerState;
+  ethernetConnected?: boolean;
+  isConfigured: boolean; // True once edited/inspected; false if untouched
+  components: ComLabHardwareComponents;
+  notes: string;
+  issueDescription?: string;
+  assignedTechnician?: string;
+  lastInspected?: string;
+  lastUpdated: string;
+  updatedBy: string;
+  telemetry?: ComLabTelemetryData;
+}
+
+export interface ComLabRowConfig {
+  rowId: string; // "A", "B", "C", "D"
+  label: string; // "Row A"
+  slotsCount: number; // Total slot positions in the row
+  activeSlots: number[]; // Slot indices containing actual PCs e.g. [1, 2, 3] for Row A
+  benchNotes?: string;
+}
+
+export interface ComLabLayoutConfig {
+  id: string;
+  labName: string;
+  direction: 'right_to_left'; // Numbering direction right to left
+  rows: ComLabRowConfig[];
+  updatedAt: string;
+  updatedBy: string;
+}
+

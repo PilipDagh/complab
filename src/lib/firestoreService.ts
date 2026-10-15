@@ -11,7 +11,15 @@ import {
   orderBy,
 } from 'firebase/firestore';
 import { db, auth } from './firebase.ts';
-import { User, DailyActivityLog, ProjectWorkOrder, HardwareAsset, AssetRepairLog } from '../types';
+import {
+  User,
+  DailyActivityLog,
+  ProjectWorkOrder,
+  HardwareAsset,
+  AssetRepairLog,
+  ComLabWorkstation,
+  ComLabLayoutConfig,
+} from '../types';
 
 export enum OperationType {
   CREATE = 'create',
@@ -417,4 +425,107 @@ export async function deleteHardwareAssetFromFirestore(assetId: string): Promise
     handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
+
+// --- COMLAB WORKSTATIONS & LAYOUT CONFIG FIRESTORE SYNC ---
+
+export async function fetchComLabWorkstationsFromFirestore(): Promise<ComLabWorkstation[]> {
+  const path = 'comlab_workstations';
+  try {
+    const snap = await getDocs(collection(db, 'comlab_workstations'));
+    if (snap.empty) {
+      return [];
+    }
+    return snap.docs.map((docSnap) => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        rowId: data.rowId || 'A',
+        rowLabel: data.rowLabel || `Row ${data.rowId || 'A'}`,
+        slotNumber: data.slotNumber ?? 1,
+        displayName: data.displayName || `PC ${data.rowId || 'A'}${data.slotNumber ?? 1}`,
+        statusLevel: data.statusLevel || 'unconfigured',
+        powerState: data.powerState || 'standby',
+        isConfigured: data.isConfigured ?? false,
+        components: data.components || { hasParts: true },
+        notes: data.notes || '',
+        issueDescription: data.issueDescription || '',
+        assignedTechnician: data.assignedTechnician || '',
+        lastInspected: data.lastInspected || undefined,
+        lastUpdated: data.lastUpdated || new Date().toISOString(),
+        updatedBy: data.updatedBy || 'System',
+        telemetry: data.telemetry || undefined,
+      } as ComLabWorkstation;
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+    return [];
+  }
+}
+
+export async function saveComLabWorkstationToFirestore(
+  workstation: ComLabWorkstation
+): Promise<void> {
+  const docId = workstation.id;
+  const path = `comlab_workstations/${docId}`;
+  try {
+    await setDoc(doc(db, 'comlab_workstations', docId), {
+      ...workstation,
+      lastUpdated: new Date().toISOString(),
+      updatedBy: auth.currentUser?.displayName || workstation.updatedBy || 'Technician',
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function saveAllComLabWorkstationsToFirestore(
+  workstations: ComLabWorkstation[]
+): Promise<void> {
+  const path = 'comlab_workstations';
+  try {
+    for (const ws of workstations) {
+      await setDoc(doc(db, 'comlab_workstations', ws.id), ws);
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function fetchComLabLayoutFromFirestore(): Promise<ComLabLayoutConfig | null> {
+  const path = 'comlab_config/main_layout';
+  try {
+    const snap = await getDoc(doc(db, 'comlab_config', 'main_layout'));
+    if (!snap.exists()) {
+      return null;
+    }
+    const data = snap.data();
+    return {
+      id: snap.id,
+      labName: data.labName || 'Main TradeTech Computer Lab (ComLab)',
+      direction: data.direction || 'right_to_left',
+      rows: data.rows || [],
+      updatedAt: data.updatedAt || new Date().toISOString(),
+      updatedBy: data.updatedBy || 'Julian (Owner)',
+    } as ComLabLayoutConfig;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, path);
+    return null;
+  }
+}
+
+export async function saveComLabLayoutToFirestore(
+  layout: ComLabLayoutConfig
+): Promise<void> {
+  const path = 'comlab_config/main_layout';
+  try {
+    await setDoc(doc(db, 'comlab_config', 'main_layout'), {
+      ...layout,
+      updatedAt: new Date().toISOString(),
+      updatedBy: auth.currentUser?.displayName || layout.updatedBy || 'Julian (Owner)',
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
 

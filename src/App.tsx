@@ -15,6 +15,7 @@ import { ForensicRecoverySuite } from './components/ForensicRecoverySuite';
 import { SignalIntegritySuite } from './components/SignalIntegritySuite';
 import { AssetInventoryManager } from './components/AssetInventoryManager';
 import { TechnicianTimeClockSuite } from './components/TechnicianTimeClockSuite';
+import { ComLabStatusSuite } from './components/comlab/ComLabStatusSuite';
 import { Toast } from './components/Toast';
 import {
   ShieldCheck,
@@ -28,6 +29,17 @@ import {
 
 const MainContent: React.FC = () => {
   const { activeTab, currentUser, isOwner } = useApp();
+
+  // ComLab Spatial Void Immersion Mode: Fullscreen void with zero standard navigation or footers
+  if (activeTab === 'comlab') {
+    return (
+      <div className="fixed inset-0 w-screen h-screen overflow-hidden bg-[#030508] z-50 text-gray-100 select-none">
+        <ComLabStatusSuite />
+        <AuthModal />
+        <Toast />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-gray-100 flex flex-col font-sans selection:bg-[#38bdf8]/30 selection:text-white overflow-x-hidden w-full max-w-full">

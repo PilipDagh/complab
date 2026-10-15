@@ -31,6 +31,14 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // ComLab Workstations and Lab Layout Collections
+    match /comlab_workstations/{workstationId} {
+      allow read, write: if true;
+    }
+    match /comlab_config/{configId} {
+      allow read, write: if true;
+    }
+
     // System Metadata
     match /system/{docId} {
       allow read, write: if true;

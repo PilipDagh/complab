@@ -87,6 +87,38 @@
         "initialized": { "type": "boolean", "description": "Whether the system has an owner registered" },
         "userCount": { "type": "number", "description": "Total registered users" }
       }
+    },
+    "ComLabWorkstation": {
+      "title": "ComLabWorkstation",
+      "description": "ComLab aerial workstation layout and hardware status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Workstation identifier (e.g. pc_A_1, pc_C_4)" },
+        "rowId": { "type": "string", "description": "Row letter (A, B, C, D)" },
+        "rowLabel": { "type": "string", "description": "Row display label" },
+        "slotNumber": { "type": "number", "description": "Slot number right to left (1, 2, 3, 4)" },
+        "displayName": { "type": "string", "description": "Display name like PC C4" },
+        "statusLevel": { "type": "string", "enum": ["green", "orange", "red", "unconfigured"] },
+        "powerState": { "type": "string", "enum": ["powered_on", "standby", "powered_off", "no_power_cable", "unplugged"] },
+        "isConfigured": { "type": "boolean", "description": "Whether status has been edited or is blank" },
+        "components": { "type": "object", "description": "Hardware specs and parts presence" },
+        "notes": { "type": "string", "description": "Technician or owner notes" },
+        "lastUpdated": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["id", "rowId", "slotNumber", "statusLevel"]
+    },
+    "ComLabConfig": {
+      "title": "ComLabConfig",
+      "description": "Lab row layout and slot configuration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "labName": { "type": "string" },
+        "rows": { "type": "array" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -105,6 +137,14 @@
     "/hardware_assets/{assetId}": {
       "schema": "#/entities/HardwareAsset",
       "description": "Scannable hardware inventory with device specifications and chronological repair histories"
+    },
+    "/comlab_workstations/{workstationId}": {
+      "schema": "#/entities/ComLabWorkstation",
+      "description": "Aerial ComLab computer workstations and hardware statuses"
+    },
+    "/comlab_config/{configId}": {
+      "schema": "#/entities/ComLabConfig",
+      "description": "ComLab physical row architecture and grid layout"
     },
     "/system/metadata": {
       "schema": "#/entities/SystemMeta",

@@ -32,12 +32,14 @@ import {
   Users,
   Tag,
   Clock,
+  Monitor,
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
   const {
     activeTab,
     setActiveTab,
+    enterComLab,
     currentUser,
     isOwner,
     logoutUser,
@@ -327,6 +329,21 @@ export const Header: React.FC = () => {
               {currentUser?.clockedIn && (
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Currently Clocked In"></span>
               )}
+            </button>
+
+            {/* 9. ComLab Status Aerial Lab Map */}
+            <button
+              onClick={() => enterComLab()}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                activeTab === 'comlab'
+                  ? 'bg-[#21262d] text-white shadow-sm border border-[#30363d] text-cyan-300'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#21262d]/50'
+              }`}
+              title="Aerial top-down view of computer rows A-D with blinking LED alerts"
+            >
+              <Monitor className="w-3.5 h-3.5 text-cyan-400" />
+              <span>ComLab Status</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
             </button>
           </nav>
 
@@ -644,6 +661,21 @@ export const Header: React.FC = () => {
               >
                 <Clock className="w-4 h-4 text-emerald-400" />
                 <span>Technician Time Clock & Activity Logger</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  enterComLab();
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex items-center gap-2 p-2 rounded-lg border text-left col-span-2 ${
+                  activeTab === 'comlab'
+                    ? 'bg-cyan-950/40 border-cyan-500/50 text-cyan-300 font-bold'
+                    : 'bg-gray-900 border-gray-800 text-gray-300 hover:text-white'
+                }`}
+              >
+                <Monitor className="w-4 h-4 text-cyan-400" />
+                <span>ComLab Status (Aerial Top-Down Grid)</span>
               </button>
 
               <button

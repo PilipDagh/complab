@@ -10,6 +10,8 @@ import {
   AssetRepairLog,
   TimeClockEntry,
   TimeClockTaskCategory,
+  ComLabWorkstation,
+  ComLabLayoutConfig,
 } from '../types';
 import {
   INITIAL_USERS,
@@ -18,6 +20,8 @@ import {
   INITIAL_PROJECT_WORK_ORDERS,
   INITIAL_HARDWARE_ASSETS,
   INITIAL_TIME_CLOCK_ENTRIES,
+  INITIAL_COMLAB_LAYOUT,
+  INITIAL_COMLAB_WORKSTATIONS,
 } from '../data/seedData';
 import { auth, googleAuthProvider } from '../lib/firebase.ts';
 import {
@@ -43,6 +47,11 @@ import {
   updateHardwareAssetInFirestore,
   addRepairLogToAssetInFirestore,
   deleteHardwareAssetFromFirestore,
+  fetchComLabWorkstationsFromFirestore,
+  saveComLabWorkstationToFirestore,
+  saveAllComLabWorkstationsToFirestore,
+  fetchComLabLayoutFromFirestore,
+  saveComLabLayoutToFirestore,
 } from '../lib/firestoreService.ts';
 
 export type AppTab =
@@ -57,7 +66,8 @@ export type AppTab =
   | 'gemini'
   | 'calendar'
   | 'assets'
-  | 'time_clock';
+  | 'time_clock'
+  | 'comlab';
 
 export interface ToastMessage {
   id: string;
@@ -69,7 +79,10 @@ export interface ToastMessage {
 interface AppContextType {
   // Navigation
   activeTab: AppTab;
+  previousTab: AppTab;
   setActiveTab: (tab: AppTab) => void;
+  enterComLab: () => void;
+  exitComLab: () => void;
 
   // Auth & RBAC
   currentUser: User | null;
@@ -160,6 +173,15 @@ interface AppContextType {
   updateTimeLog: (id: string, updates: Partial<TimeClockEntry>) => Promise<void>;
   exportTimesheetsCsv: (technicianId?: string, startDate?: string, endDate?: string) => void;
 
+  // ComLab Status & Layout Management
+  comLabWorkstations: ComLabWorkstation[];
+  comLabLayout: ComLabLayoutConfig;
+  selectedWorkstationId: string | null;
+  setSelectedWorkstationId: (id: string | null) => void;
+  updateComLabWorkstationStatus: (id: string, updates: Partial<ComLabWorkstation>) => Promise<void>;
+  updateComLabLayout: (newLayout: ComLabLayoutConfig) => Promise<void>;
+  resetComLabToSchoolDefaults: () => Promise<void>;
+  simulateTelemetryHeartbeat: (workstationId: string) => Promise<void>;
 
   // Toast
   toasts: ToastMessage[];
@@ -171,7 +193,45 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Navigation
-  const [activeTab, setActiveTab] = useState<AppTab>('diagnostic');
+  const [activeTab, setActiveTabState] = useState<AppTab>('diagnostic');
+  const [previousTab, setPreviousTab] = useState<AppTab>('diagnostic');
+
+  const setActiveTab = (tab: AppTab) => {
+    setActiveTabState((current) => {
+      if (current !== 'comlab' && tab === 'comlab') {
+        setPreviousTab(current);
+      }
+      return tab;
+    });
+  };
+
+  const enterComLab = () => {
+    setActiveTabState((current) => {
+      if (current !== 'comlab') {
+        setPreviousTab(current);
+      }
+      return 'comlab';
+    });
+    try {
+      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+    } catch {
+      // Safe fallback if fullscreen is prevented by iframe sandbox
+    }
+  };
+
+  const exitComLab = () => {
+    try {
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+    } catch {
+      // Safe fallback
+    }
+    setActiveTabState(previousTab || 'diagnostic');
+  };
+
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'signup' | 'profiles_menu'>('login');
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
@@ -192,6 +252,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Time Clock & Shift Task Logs State
   const [timeClockEntries, setTimeClockEntries] = useState<TimeClockEntry[]>(INITIAL_TIME_CLOCK_ENTRIES);
+
+  // ComLab Workstations & Aerial Room State
+  const [comLabWorkstations, setComLabWorkstations] = useState<ComLabWorkstation[]>(() => {
+    try {
+      const saved = localStorage.getItem('tradetech_comlab_workstations');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn('Failed reading comlab workstations cache', e);
+    }
+    return INITIAL_COMLAB_WORKSTATIONS;
+  });
+
+  const [comLabLayout, setComLabLayout] = useState<ComLabLayoutConfig>(() => {
+    try {
+      const saved = localStorage.getItem('tradetech_comlab_layout');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn('Failed reading comlab layout cache', e);
+    }
+    return INITIAL_COMLAB_LAYOUT;
+  });
+
+  const [selectedWorkstationId, setSelectedWorkstationId] = useState<string | null>(null);
 
   // Toast System
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -285,6 +368,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               console.warn('Initial asset seed fallback:', seedErr);
             }
           }
+        }
+
+        // Fetch ComLab Workstations from Firestore
+        const fsWorkstations = await fetchComLabWorkstationsFromFirestore();
+        if (fsWorkstations && fsWorkstations.length > 0) {
+          setComLabWorkstations(fsWorkstations);
+          localStorage.setItem('tradetech_comlab_workstations', JSON.stringify(fsWorkstations));
+        } else {
+          // Asynchronously initialize Firestore with default workstations
+          saveAllComLabWorkstationsToFirestore(INITIAL_COMLAB_WORKSTATIONS).catch((err) =>
+            console.warn('ComLab seed workstations warning:', err)
+          );
+        }
+
+        // Fetch ComLab Layout from Firestore
+        const fsLayout = await fetchComLabLayoutFromFirestore();
+        if (fsLayout) {
+          setComLabLayout(fsLayout);
+          localStorage.setItem('tradetech_comlab_layout', JSON.stringify(fsLayout));
+        } else {
+          saveComLabLayoutToFirestore(INITIAL_COMLAB_LAYOUT).catch((err) =>
+            console.warn('ComLab seed layout warning:', err)
+          );
         }
       } catch (err) {
         console.warn('Firestore initial data load notice (using memory defaults):', err);
@@ -1415,12 +1521,159 @@ Previous Repairs: ${activeScannedAsset.repairHistory.map((r) => `[${r.date}] ${r
     });
   };
 
+  // --- COMLAB WORKSTATION & LAYOUT OPERATIONS ---
+
+  const updateComLabWorkstationStatus = async (
+    id: string,
+    updates: Partial<ComLabWorkstation>
+  ) => {
+    let updatedStation: ComLabWorkstation | null = null;
+    setComLabWorkstations((prev) => {
+      const next = prev.map((ws) => {
+        if (ws.id === id) {
+          updatedStation = {
+            ...ws,
+            ...updates,
+            isConfigured: true,
+            lastUpdated: new Date().toISOString(),
+            updatedBy: currentUser?.displayName || 'Julian (Owner)',
+          };
+          return updatedStation;
+        }
+        return ws;
+      });
+      localStorage.setItem('tradetech_comlab_workstations', JSON.stringify(next));
+      return next;
+    });
+
+    if (updatedStation) {
+      try {
+        await saveComLabWorkstationToFirestore(updatedStation);
+      } catch (err) {
+        console.warn('Failed to sync workstation status to cloud:', err);
+      }
+
+      addToast({
+        type: 'success',
+        title: 'Workstation Status Saved',
+        message: `${(updatedStation as ComLabWorkstation).displayName} status updated to ${(updatedStation as ComLabWorkstation).statusLevel.toUpperCase()} and saved to cloud.`,
+      });
+    }
+  };
+
+  const updateComLabLayout = async (newLayout: ComLabLayoutConfig) => {
+    const updated = {
+      ...newLayout,
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUser?.displayName || 'Julian (Owner)',
+    };
+    setComLabLayout(updated);
+    localStorage.setItem('tradetech_comlab_layout', JSON.stringify(updated));
+
+    // Ensure all active slots have matching workstation records
+    setComLabWorkstations((prev) => {
+      const existingMap = new Map(prev.map((ws) => [ws.id, ws]));
+      const nextList: ComLabWorkstation[] = [];
+
+      newLayout.rows.forEach((row) => {
+        row.activeSlots.forEach((slotNum) => {
+          const wsId = `pc_${row.rowId}_${slotNum}`;
+          if (existingMap.has(wsId)) {
+            nextList.push(existingMap.get(wsId)!);
+          } else {
+            // New workstation slot created by owner
+            nextList.push({
+              id: wsId,
+              rowId: row.rowId,
+              rowLabel: row.label,
+              slotNumber: slotNum,
+              displayName: `PC ${row.rowId}${slotNum}`,
+              statusLevel: 'unconfigured',
+              powerState: 'standby',
+              isConfigured: false,
+              components: { hasParts: true },
+              notes: 'Newly added workstation bench. Blank until inspected.',
+              lastUpdated: new Date().toISOString(),
+              updatedBy: currentUser?.displayName || 'Julian (Owner)',
+            });
+          }
+        });
+      });
+
+      localStorage.setItem('tradetech_comlab_workstations', JSON.stringify(nextList));
+      saveAllComLabWorkstationsToFirestore(nextList).catch((e) =>
+        console.warn('Sync new workstations warning:', e)
+      );
+      return nextList;
+    });
+
+    try {
+      await saveComLabLayoutToFirestore(updated);
+    } catch (err) {
+      console.warn('Failed to sync layout to cloud:', err);
+    }
+
+    addToast({
+      type: 'success',
+      title: 'Lab Layout Updated',
+      message: `ComLab physical grid architecture saved by ${updated.updatedBy}.`,
+    });
+  };
+
+  const resetComLabToSchoolDefaults = async () => {
+    setComLabWorkstations(INITIAL_COMLAB_WORKSTATIONS);
+    setComLabLayout(INITIAL_COMLAB_LAYOUT);
+    localStorage.setItem('tradetech_comlab_workstations', JSON.stringify(INITIAL_COMLAB_WORKSTATIONS));
+    localStorage.setItem('tradetech_comlab_layout', JSON.stringify(INITIAL_COMLAB_LAYOUT));
+
+    try {
+      await saveAllComLabWorkstationsToFirestore(INITIAL_COMLAB_WORKSTATIONS);
+      await saveComLabLayoutToFirestore(INITIAL_COMLAB_LAYOUT);
+    } catch (err) {
+      console.warn('Failed to reset cloud comlab defaults:', err);
+    }
+
+    addToast({
+      type: 'info',
+      title: 'ComLab Layout Reset',
+      message: 'Restored standard 4-row layout (Row A 3 PCs, C3 disconnected, C4 zero parts).',
+    });
+  };
+
+  const simulateTelemetryHeartbeat = async (workstationId: string) => {
+    const station = comLabWorkstations.find((ws) => ws.id === workstationId);
+    if (!station) return;
+
+    const randTemp = Math.floor(37 + Math.random() * 8);
+    const randRam = Math.floor(20 + Math.random() * 30);
+    const updatedTelemetry = {
+      ...(station.telemetry || {}),
+      cpuTempCelsius: randTemp,
+      ramUsagePercent: randRam,
+      lastPing: new Date().toISOString(),
+      agentOnline: true,
+    };
+
+    await updateComLabWorkstationStatus(workstationId, {
+      telemetry: updatedTelemetry,
+      notes: station.notes || `Telemetry ping received at ${new Date().toLocaleTimeString()}`,
+    });
+
+    addToast({
+      type: 'info',
+      title: 'Telemetry Heartbeat Received',
+      message: `${station.displayName} reported live agent metrics: ${randTemp}°C, ${randRam}% RAM.`,
+    });
+  };
 
   return (
     <AppContext.Provider
       value={{
         activeTab,
+        previousTab,
         setActiveTab,
+        enterComLab,
+        exitComLab,
         currentUser,
         users,
         isOwner,
@@ -1492,6 +1745,15 @@ Previous Repairs: ${activeScannedAsset.repairHistory.map((r) => `[${r.date}] ${r
         deleteTimeLog,
         updateTimeLog,
         exportTimesheetsCsv,
+
+        comLabWorkstations,
+        comLabLayout,
+        selectedWorkstationId,
+        setSelectedWorkstationId,
+        updateComLabWorkstationStatus,
+        updateComLabLayout,
+        resetComLabToSchoolDefaults,
+        simulateTelemetryHeartbeat,
 
         toasts,
         addToast,

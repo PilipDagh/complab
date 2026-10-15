@@ -21,6 +21,7 @@ import {
   Tag,
   Users,
   Clock,
+  Monitor,
 } from 'lucide-react';
 
 interface ToolSearchItem {
@@ -433,6 +434,15 @@ const SEARCHABLE_TOOLS: ToolSearchItem[] = [
     tab: 'time_clock',
     keywords: ['time clock', 'clock in', 'clock out', 'punch', 'hours', 'timesheet', 'shift', 'tasks', 'activity', 'julian', 'workers'],
     icon: <Clock className="w-4 h-4 text-emerald-400" />,
+  },
+  {
+    id: 'comlab_status',
+    title: 'ComLab Status Aerial Digital Twin',
+    subtitle: 'Top-down aerial view of computer rows A-D, blinking LED indicators (red, orange, green), C4 zero parts, C3 no power & layout editor',
+    category: 'Workstation & Floor',
+    tab: 'comlab',
+    keywords: ['comlab', 'status', 'aerial', 'top down', 'rows', 'row a', 'row b', 'row c', 'row d', 'computer', 'led', 'blinking red', 'orange', 'green', 'zero parts', 'c4', 'c3', 'owner layout'],
+    icon: <Monitor className="w-4 h-4 text-cyan-400" />,
   },
 ];
 
