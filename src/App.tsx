@@ -3,6 +3,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/Header';
 import { AuthModal } from './components/AuthModal';
 import { AssetQRScannerModal } from './components/AssetQRScannerModal';
+import { AssetPhotoAutofillModal } from './components/AssetPhotoAutofillModal';
 import { DiagnosticWizard } from './components/DiagnosticWizard';
 import { GeminiChatbot } from './components/GeminiChatbot';
 import { BenchReference } from './components/BenchReference';
@@ -28,7 +29,13 @@ import {
 } from 'lucide-react';
 
 const MainContent: React.FC = () => {
-  const { activeTab, currentUser, isOwner } = useApp();
+  const {
+    activeTab,
+    currentUser,
+    isOwner,
+    isPhotoAutofillModalOpen,
+    setIsPhotoAutofillModalOpen,
+  } = useApp();
 
   // ComLab Spatial Void Immersion Mode: Fullscreen void with zero standard navigation or footers
   if (activeTab === 'comlab') {
@@ -94,6 +101,10 @@ const MainContent: React.FC = () => {
       {/* Modals and Toasts */}
       <AuthModal />
       <AssetQRScannerModal />
+      <AssetPhotoAutofillModal
+        isOpen={isPhotoAutofillModalOpen}
+        onClose={() => setIsPhotoAutofillModalOpen(false)}
+      />
       <Toast />
     </div>
   );

@@ -1,227 +1,136 @@
-# ComLab Status Aerial Laboratory Map & Hardware Monitoring Suite
+# Multi-Photo AI Asset Autofill, Responsive UI Polish & Blank Location Support
 
-A top-down aerial digital twin of the trade school computer laboratory ("ComLab") providing real-time hardware status oversight, blinking LED alert states (Critical Blinking Red, Warning Orange, Nominal Green, and Unconfigured Blank), interactive status editing for technicians and instructors, and an Owner-exclusive interactive layout editor with Firestore cloud synchronization.
+Automates hardware asset registration through multi-photo visual capture (camera and file upload) with Gemini multimodal extraction of QR codes, serial numbers, make/model, and hardware specs, paired with a responsive screen-fitting UI overhaul and optional "Blank" (Unassigned) location categorization.
 
-## User Review & Critical Decisions
+### User Review & Critical Decisions
 
 > [!IMPORTANT]
-> The following architectural and user experience decisions synthesize your confirmed preferences alongside the physical specifications of your 4-row computer lab:
+> The following product decisions were confirmed during the interactive interview and will guide this implementation:
 
-- **Confirmed Aesthetic**: Interactive dark cyber-lab grid with glowing LED indicators, top-down desk geometry, subtle room orientation cues (Instructor master station / whiteboard), and realistic pulsing optical indicators.
-- **Confirmed Status Modal**: Deep inspection dialog detailing Status Alert Level, Power Connection State, Installed Hardware Components (with zero-parts chassis toggle), and Technician Maintenance Notes.
-- **Confirmed Owner Controls**: Visual in-place grid editor allowing the Owner (`ROLE_OWNER` / Julian) to add/remove rows, add/remove computers, toggle active/inactive seats, and persist layout schemas to Firestore.
-- **Initial Physical Layout Seeded**:
-  - **Row A**: 3 active PCs (A1, A2, A3; seat 4 empty).
-  - **Row B**: 4 active PCs (B1, B2, B3, B4).
-  - **Row C**: 4 PCs, where **C4 has ZERO parts inside** (bare chassis, critical red blink), and **C3 has NO power plugged in** (disconnected power, warning amber).
-  - **Row D**: 4 active PCs (D1, D2, D3, D4).
-  - **Numbering Orientation**: Strictly right-to-left (PC 1 on the right, proceeding leftward to PC 4), matching the physical classroom walk-through perspective.
-  - **Blank until edited**: All unconfigured workstations remain in a clean, unedited blank state until updated by authorized technicians.
-- **Future-Proofing Agent Telemetry**: Workstation status models include simulated agent heartbeat metadata and webhook endpoint structures for seamless transition to automated client-reporting daemons.
+- **Confirmed Decision 1 (Photo Capture & Input)**: Support both real-time device camera capture (continuous snapshot mode for front/back/bottom labels) and multi-photo file upload, allowing technicians to snap bottom labels, serial stickers, and QR tags in one session.
+- **Confirmed Decision 2 (AI Auto-Fill & Review Flow)**: Extracted specs (Serial Number, Model/Make, CPU, RAM, Storage, Device Type, OS) will instantly autofill directly into the intake form with visual green highlight glows on scanned fields, leaving the technician only to mark any problem status and enter non-tech notes.
+- **Confirmed Decision 3 (Blank Location Behavior)**: Support a first-class "Blank" option in the location selector, represented cleanly as "Unassigned" across inventory tables, filter bars, and card badges, with a dedicated quick-filter tag to easily isolate unassigned assets.
+- **Confirmed Decision 4 (Screen-Fitting UI Layout)**: Fix all overflowing containers, modal max-height clamps, and cramped controls so the entire dashboard and asset workflow fit comfortably within any viewport (mobile, tablet, desktop) without broken horizontal scrollbars or clipping.
 
 ---
 
-## 1. Overview & Core Concept
+### 1. Overview & Core Concept
 
-### What It Does
-ComLab Status introduces a live interactive top-down schematic map of the training facility's computer laboratory rows. Technicians, instructors (Julian), and workers can instantly see the health of every student workstation at a glance via color-coded LEDs. Clicking any workstation opens an advanced hardware status drawer to view or update power connectivity, component inventory, alert level, and repair notes. Changes automatically save to Firestore cloud storage.
-
-### Target Audience & Persona
-- **Julian (Owner / Lead Instructor)**: Can reconfigure lab bench geometry, add new computer rows or stations, adjust right-to-left seat counts, and monitor class hardware readiness.
-- **Lab Technicians & Workers (Kylin, Jason, Tristan, Xaiver)**: Can inspect individual computers, flag machines needing urgent parts or diagnostics, log power cord disconnects, and update status LEDs.
-- **Students**: Can view bench availability and nominal operational status without administrative edit rights.
-
-### Key Value
-Eliminates physical walk-around uncertainty by maintaining a synchronized digital twin of the vocational lab floor, highlighting missing parts, disconnected power, and bench triage requirements in real time.
+- **What It Does**: Technicians and vocational students frequently intake laptops and hardware units with small stickers, QR codes, barcode labels, and technical specs. Instead of manually typing long serial numbers and technical specs, users take 1 to 4 photos (e.g. laptop top lid, bottom regulatory sticker, barcode/QR sticker, BIOS/spec screen). Gemini 3.8 / 3.1 Flash analyzes all photos collectively, extracts the model, serial number, regulatory tag, device classification, and technical specifications, and fills the form instantly. The user then simply selects or marks whether the unit has a problem (using 1-click CompTIA presets) and enters optional bench notes.
+- **Target Audience / Persona**: Vocational instructors (Julian), student technicians, and lab assistants at Fred W. Eberle Technical Center managing hundreds of laptops and lab units.
+- **Key Value**: Drastically reduces intake triage time from 5 minutes down to 15 seconds per laptop, eliminates manual typing errors on serial numbers, and provides a clean, glitch-free dashboard that fits perfectly on workshop laptops, tablets, and phones.
 
 ---
 
-## 2. User Experience & Visual Design
+### 2. User Experience & Visual Design
 
-### Key User Flows
+#### Key User Flows
+1. **Initiate Asset Registration**: In the Asset Inventory tab, click the enhanced **"Add New Asset"** or **"Snap & Autofill (AI Lens)"** action.
+2. **Multi-Photo Capture & Staging**:
+   - Technician selects **Live Camera** (with toggle for front/rear camera and capture button) or clicks **Upload Photos** to drag/drop multiple photos of the laptop bottom, serial plate, and QR codes.
+   - Thumbnails display with individual remove buttons and a prominent **"Analyze & Autofill Specs"** button.
+3. **Multimodal AI Extraction**:
+   - The backend `/api/gemini/extract-asset-specs` processes the images using Gemini multimodal vision with structured JSON output.
+   - The intake form populates immediately: Model, Serial Number, Device Type (Laptop, Desktop, Switch), CPU, RAM, Storage, OS, and MAC/Regulatory ID.
+   - Fields populated by AI glow with a transient cyan/emerald accent border and an "AI Detected" indicator.
+4. **Technician Review & Problem Marking**:
+   - The technician verifies the detected fields, selects **Location** (including the new **"Blank / Unassigned"** default option), and marks whether the unit has an active problem using CompTIA problem presets (e.g., "Cracked Display", "No Power", "RAM Bit Flipping").
+5. **Save to Cloud**:
+   - Asset saves directly into Firestore/Cloud SQL state, updates inventory metrics in real-time, and displays a success toast.
 
-1. **Top-Down Aerial Overview**:
-   - The user opens the dedicated **ComLab Status** tab from the main navigation header.
-   - A lab room canvas renders with an aerial view of Rows A, B, C, and D.
-   - At the top of the room, a subtle "Front of Lab / Projector & Whiteboard" orientation bar provides physical directional reference.
-   - In each row, computers are numbered right-to-left: `[PC 4] [PC 3] [PC 2] [PC 1]`.
-   - Each computer station shows a top-down workstation graphic (chassis tower, keyboard/mouse zone, dual monitors) and a high-visibility LED indicator:
-     - **Blinking Red**: Immediate attention / critical failure (e.g., C4 bare chassis missing parts).
-     - **Amber / Orange**: Moderate issue that can wait (e.g., C3 power disconnected).
-     - **Emerald Green**: Nominal / all systems verified.
-     - **Subtle Gray / Outline**: Blank / unconfigured station.
-   - Top summary KPI strip displays total stations, nominal count, warning count, critical count, and unconfigured count with fast filter pills.
-
-2. **Inspecting & Editing Workstation Status**:
-   - The technician or owner clicks on any workstation card (e.g., Row C, PC 4).
-   - An **Advanced Workstation Status Modal** slides in:
-     - **Status Banner**: Displays current alert state with clear text (e.g., "Critical Attention Required - Blinking Red") and visual preview.
-     - **Status Selector**: Instant buttons for *Nominal (Green)*, *Non-Emergency Issue (Orange)*, *Critical Attention (Blinking Red)*, or *Blank / Unset*.
-     - **Power Connection State**: Radio buttons for *Plugged In & Powered*, *Plugged In (Standby/Off)*, *No Power Plugged In (Disconnected)*, and *Faulty PSU / Tripped Breaker*.
-     - **Hardware Inventory Checklist**: Quick toggles for Motherboard, CPU, RAM, Storage (SSD/NVMe), GPU, Power Supply, and a one-click *"Bare Chassis (Zero Parts Inside)"* preset that accurately reflects C4.
-     - **Technician Field Notes**: Textarea for troubleshooting details and action items.
-     - **Future Agent Telemetry Preview**: Tab showing how automated local reporting scripts will push live diagnostics via API.
-   - Clicking **"Save Workstation Status"** commits the record to Firestore cloud database (`/comlab_computers/{computerId}`) and dispatches an instant toast notification.
-
-3. **Owner Visual Layout Editor**:
-   - When signed in as the Owner (`currentUser.role === 'ROLE_OWNER'`), an **"Edit Lab Layout"** toggle appears in the room action toolbar.
-   - In Layout Edit Mode:
-     - Each row gains controls to add or remove seats (`+ Add Station`, `- Remove Station`).
-     - Technicians can toggle individual seats active or inactive (e.g., marking Row A seat 4 as an empty desk space).
-     - Rows can be re-ordered, renamed, or new rows added (e.g., Row E).
-     - A *"Reset to Lab Default (Rows A-D)"* button guarantees safety.
-     - Changes persist to Firestore (`/comlab_layout/config`) and reflect in real time.
-
-### Visual Identity & Theme
-- **Theme Palette**: Neutral deep slate background (`#0d1117`), structural cards in `#161b22`, border accents in `#30363d` and `#38bdf8`.
-- **LED Alert Colors**:
-  - *Critical Blinking Red*: `#ef4444` with a CSS keyframe animation pulsing between `opacity: 1` and `opacity: 0.25` accompanied by an ambient red glow shadow (`box-shadow: 0 0 12px rgba(239, 68, 68, 0.75)`).
-  - *Warning Orange*: `#f59e0b` with warm amber steady illumination.
-  - *Nominal Green*: `#10b981` with crisp emerald radiance.
-  - *Blank / Unset*: Muted `#4b5563` dark outline denoting an unconfigured blank state.
-- **Typography**: Clean title fonts in `Plus Jakarta Sans` / `DM Sans`, paired with `font-mono tabular-nums` for station IDs (`A1`, `B4`, `C3`) and timestamps.
-- **Anti-Slop Discipline**: Zero pseudo-code prefixes, clean unboxed metadata with typographic dots (`·`), and single-elevation cards with crisp 1px borders.
+#### Visual Identity & Theme
+- **Aesthetic Direction**: High-precision vocational dark slate lab interface (`#0B0F19` canvas, `#161B26` containers, `#232D3F` hairline borders). Clean, utilitarian, anti-slop design.
+- **Color Palette**:
+  - Deep Neutral Canvas: `#0B0F19` (60%)
+  - Structural Cards & Surfaces: `#161B26` and `#1E2638` (30%)
+  - Functional Accents: Emerald (`#10B981`) for verified/healthy states, Cyan (`#38BDF8`) for AI vision scanning, Amber (`#F59E0B`) for warnings, Crimson (`#EF4444`) for critical defects (10% budget).
+- **Typography & Hierarchy**:
+  - Headers: Manrope / Plus Jakarta Sans font style (`font-sans font-bold`).
+  - Technical Data & Identifiers: Strictly tabular monospace (`font-mono tabular-nums`) for serial numbers, asset tags, bench numbers, and specs.
+- **Screen-Fitting Layout & Viewport Containment**:
+  - Fix modal containment with `max-h-[90vh] overflow-y-auto` and sticky headers/footers so modal action buttons are always reachable regardless of screen resolution.
+  - Responsive multi-column grid with `grid-cols-1 md:grid-cols-2 xl:grid-cols-3` that eliminates viewport blowout and horizontal document scroll.
+  - Compact row heights (40px) for tables with text truncation and tooltips.
 
 ---
 
-## 3. Key Product Decisions & Trade-Offs
+### 3. Key Product Decisions & Trade-Offs
 
-- **Right-to-Left Visual Numbering**:
-  - *Chosen Approach*: The grid layout applies column ordering such that computer 1 is stationed on the right and computer 4 on the left, respecting the physical room orientation.
-  - *Why*: Direct spatial correspondence prevents technicians from mistaking C1 for C4 when servicing machines in the physical room.
-
-- **Dual-Layer Cloud Persistence (Firestore + Local Fallback)**:
-  - *Chosen Approach*: The layout and workstation status records synchronize to Firestore collections (`comlab_layout` and `comlab_computers`) using the established `firestoreService.ts` patterns, with optimistic local state and `localStorage` caching for instant offline resiliency.
-  - *Why*: Guarantees zero latency on station clicks while persisting updates securely across instructor and technician browsers.
-
-- **Role-Based Layout Control**:
-  - *Chosen Approach*: Owner accounts (`ROLE_OWNER`) have exclusive access to layout mutations (adding/removing rows and stations), while both Owner and Workers (`ROLE_WORKER` / `user_julian_admin`) can edit computer statuses, alert levels, and hardware components. Students have read-only inspection access.
-  - *Why*: Enforces structural integrity of the lab floor while empowering all bench technicians to report and resolve hardware issues.
+- **Decision 1: Server-Side Multimodal Gemini Extraction vs. Client OCR**:
+  - *Chosen Approach*: Route images to a dedicated server endpoint (`/api/gemini/extract-asset-specs`) using the `@google/genai` SDK with `gemini-3.8-flash` (or `gemini-3.1-flash-lite` fallback).
+  - *Why*: Laptop bottom stickers contain fragmented abbreviations (`S/N:`, `Service Tag:`, `Reg Model:`, `P/N:`, `16GB DDR5`, `i7-13700H`, QR/DataMatrix codes). Generic client OCR produces garbled strings; Gemini multimodal vision accurately parses layout context, decodes tiny barcodes/QR codes, and normalizes specs into structured JSON.
+  - *Security & Privacy*: API keys remain strictly server-side in accordance with the `@google/genai` guidelines.
+- **Decision 2: Location Handling with "Blank / Unassigned" Option**:
+  - *Chosen Approach*: Add `""` / `"Unassigned"` as the first option in the bench location dropdown and quick filters.
+  - *Why*: Allows technicians to register incoming stock or off-bench repairs that do not yet have a designated physical lab bench.
+- **Decision 3: Multi-Photo Batch Staging**:
+  - *Chosen Approach*: Technicians can take or upload up to 4 photos per asset (e.g. Lid photo, Bottom serial sticker, Port label, Screen/BIOS). All images are merged into a single multi-part prompt, enabling cross-referencing between the model name on the bezel and the serial code on the bottom label.
 
 ---
 
-## 4. Technical Architecture & Data Strategy
-
-### System Component Architecture
+### 4. Technical Architecture & Data Strategy
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                               Header.tsx                               │
-│            (ComLab Status Navigation Tab & Quick Counts)               │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ activeTab === 'comlab_status'
-                                    ▼
+│                        TradeTech Client UI                             │
+│                                                                        │
+│  ┌───────────────────────┐          ┌───────────────────────────────┐  │
+│  │ AssetInventoryManager │          │   AssetPhotoAutofillModal     │  │
+│  │ - Unassigned Filter   │ ◄─────── │   - Live Camera Stream        │  │
+│  │ - Screen-Fit Grid/List│          │   - Multi-Photo File Drop     │  │
+│  │ - Quick Problem Marks │          │   - Highlighted Spec Review   │  │
+│  └───────────────────────┘          └───────────────┬───────────────┘  │
+└─────────────────────────────────────────────────────┼──────────────────┘
+                                                      │ POST Base64 Photos
+                                                      ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        ComLabStatusSuite.tsx                           │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │ Room Controls & Filter Toolbar                                   │  │
-│  │ • Summary Status Metrics (Nominal, Warning, Critical, Blank)     │  │
-│  │ • Owner "Edit Lab Layout" Toggle & Layout Config Actions         │  │
-│  │ • View Filter (All Rows vs Specific Row / Alert Status Filter)   │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │ Aerial Room Grid Canvas (Front of Lab Orientation Bar)           │  │
-│  │                                                                  │  │
-│  │  Row A: [ Empty (4) ] [ PC A3 (Green) ] [ PC A2 (Green) ] [ PC A1 ] │
-│  │  Row B: [ PC B4 (Green) ] [ PC B3 ] [ PC B2 ] [ PC B1 ]          │  │
-│  │  Row C: [ PC C4 (BLINK RED - ZERO PARTS) ]                       │  │
-│  │         [ PC C3 (ORANGE - NO POWER) ] [ PC C2 ] [ PC C1 ]        │  │
-│  │  Row D: [ PC D4 ] [ PC D3 ] [ PC D2 ] [ PC D1 ]                  │  │
-│  │                                                                  │  │
-│  │  * Right-to-Left numbering orientation                           │  │
-│  └──────────────────┬───────────────────────────────────────────────┘  │
-└─────────────────────┼──────────────────────────────────────────────────┘
-                      │ On Workstation Click
-                      ▼
+│                     Node.js / Express Server                           │
+│                                                                        │
+│   POST /api/gemini/extract-asset-specs                                 │
+│   ┌────────────────────────────────────────────────────────────────┐   │
+│   │ GoogleGenAI SDK (gemini-3.8-flash / gemini-3.1-flash-lite)      │   │
+│   │ Structured JSON Schema Response:                               │   │
+│   │ {                                                              │   │
+│   │   make, model, serialNumber, deviceType, cpu, ram, storage,    │   │
+│   │   gpu, macAddress, os, detectedConditionHint                   │   │
+│   │ }                                                              │   │
+│   └────────────────────────────────┬───────────────────────────────┘   │
+└────────────────────────────────────┼───────────────────────────────────┘
+                                     │
+                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│                    ComputerStatusModal.tsx                             │
-│  • LED Alert Selection (Blink Red / Warning Orange / Green / Blank)    │
-│  • Power Status Selection (Connected / Disconnected / Tripped)         │
-│  • Hardware Specs & "Zero Parts Inside" Toggle                         │
-│  • Technician Notes & Telemetry API Webhook Preview                    │
-└─────────────────────┬──────────────────────────────────────────────────┘
-                      │ On Save
-                      ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│               AppContext.tsx & firestoreService.ts                     │
-│  • saveComputerStatusToFirestore('/comlab_computers/{id}')             │
-│  • saveLabLayoutToFirestore('/comlab_layout/config')                   │
-│  • Optimistic updates & localStorage fallback                           │
+│                     Firestore & Local Storage Sync                     │
+│   Collection: hardwareAssets                                           │
+│   - assignedBench: "" | "Unassigned" | "Bench #X"                      │
+│   - problemLabel: { hasProblem, problemTitle, severity, description }  │
+│   - specs: { cpu, ram, storage, gpu, macAddress, os }                  │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Data Models & Schemas
-
-```typescript
-export type ComputerAlertStatus = 'blink_red' | 'orange' | 'green' | 'blank';
-export type ComputerPowerState = 'plugged_on' | 'plugged_off' | 'unplugged' | 'psu_fault';
-
-export interface ComputerHardwareSpecs {
-  hasBareChassisOnly: boolean; // true for Row C4 (Zero parts inside)
-  cpu?: string;
-  ramGb?: number;
-  storage?: string;
-  gpu?: string;
-  psuWatts?: number;
-  hasPeripherals: boolean;
-}
-
-export interface ComLabComputer {
-  id: string; // e.g., 'pc_row_c_4'
-  rowId: string; // 'A', 'B', 'C', 'D'
-  stationNumber: number; // 1, 2, 3, 4 (numbered right-to-left)
-  status: ComputerAlertStatus;
-  powerState: ComputerPowerState;
-  hardware: ComputerHardwareSpecs;
-  technicianNotes: string;
-  isConfigured: boolean; // false until first edited (blank until edited)
-  lastUpdated?: string;
-  updatedBy?: string;
-}
-
-export interface ComLabRowConfig {
-  rowId: string; // 'A', 'B', 'C', 'D'
-  label: string; // 'Row A'
-  maxPositions: number; // default 4
-  activePositions: number[]; // e.g., Row A: [1, 2, 3]; Row C: [1, 2, 3, 4]
-}
-
-export interface ComLabLayoutConfig {
-  id: string;
-  rows: ComLabRowConfig[];
-  updatedAt: string;
-  updatedBy: string;
-}
-```
-
-### Initial Data Seeding Strategy
-- **Row A**: Active positions `[1, 2, 3]`. Position 4 is marked empty desk space. Stations A1, A2, A3 initialized in nominal or blank status.
-- **Row B**: Positions `[1, 2, 3, 4]`.
-- **Row C**:
-  - `C4`: `status: 'blink_red'`, `hardware: { hasBareChassisOnly: true }`, `technicianNotes: 'Chassis stripped for vocational lab parts teardown. Zero internal components.'`, `isConfigured: true`.
-  - `C3`: `status: 'orange'`, `powerState: 'unplugged'`, `technicianNotes: 'No power plugged in. Needs 120V IEC cable routed from bench conduit.'`, `isConfigured: true`.
-  - `C2`, `C1`: Initialized as unconfigured blank stations ready for technician entry.
-- **Row D**: Positions `[1, 2, 3, 4]`.
+#### Detailed Implementation Scope
+1. **Server Endpoint (`server.ts`)**:
+   - Add `POST /api/gemini/extract-asset-specs` accepting an array of base64 image strings.
+   - Build a specialized prompt instructing Gemini to parse manufacturer branding (Dell, Lenovo, HP, Apple, Cisco, Asus, Acer), serial numbers (`S/N`, `Service Tag`, `Serial`, `SN`), QR code contents, MAC addresses, and technical specs.
+   - Enforce structured JSON response schema (`Type.OBJECT`) for deterministic client parsing.
+2. **Asset Model & Schema (`src/types/index.ts`)**:
+   - Ensure `HardwareAsset['assignedBench']` cleanly accommodates `""` and `"Unassigned"`.
+   - Update `specs` and intake types to include any optional photo references.
+3. **Asset Intake & Autofill Component (`src/components/AssetPhotoAutofillModal.tsx` & `AssetInventoryManager.tsx`)**:
+   - Build camera viewfinder with frame guidelines for serial labels and QR codes.
+   - Multi-image dropzone with preview pills and delete buttons.
+   - Direct injection into form fields with animated pulse highlight for newly auto-filled fields.
+   - Location dropdown featuring `[ Blank / Unassigned ]` as a prominent option.
+   - Problem marker section with one-click CompTIA diagnostic presets.
+4. **UI Screen-Fitting & Layout Polish**:
+   - Overhaul `AssetInventoryManager.tsx` and all parent layout containers to use `w-full max-w-7xl mx-auto px-4 sm:px-6` with proper flex-wrap and responsive breakpoint handling (`xs`, `sm`, `md`, `lg`, `xl`).
+   - Fix all modal viewport constraints (`max-h-[85vh]` scrollable body with pinned header and footer actions).
+   - Add filter tag for `"Unassigned / Blank Location"` alongside `"On-Hand"`, `"Has Problem"`, and `"Healthy"`.
 
 ---
 
-## 5. Verification Plan
-
-1. **Top-Down Aerial Rendering**:
-   - Verify Rows A, B, C, and D are displayed with PC numbers arranged strictly right-to-left (`4, 3, 2, 1`).
-   - Confirm Row A displays only 3 computers.
-   - Confirm C4 blinks red with a critical visual alert and reports zero parts inside.
-   - Confirm C3 displays orange warning with power unplugged status.
-   - Confirm remaining computers show as blank/unconfigured until edited.
-
-2. **Status Editing Verification**:
-   - As Julian (Owner) or a Worker (Kylin/Jason), click an unconfigured PC, set status to Blink Red, Orange, or Green, adjust power state, enter notes, and save.
-   - Verify the LED updates immediately in the room view and persists across page reload via Firestore/local storage.
-
-3. **Owner Layout Editor Verification**:
-   - When signed in as Owner, verify the "Edit Lab Layout" mode can be toggled.
-   - Test adding/removing a seat on a row and adding a new row.
-   - Sign in as a Worker or Student and verify that the layout edit mode is inaccessible and hidden.
-
-4. **Code Quality & Build Check**:
-   - Run `compile_applet` to ensure TypeScript compilation without errors.
+### Verification & Testing Plan
+- Test camera capture and multi-photo file upload with real sample laptop labels.
+- Verify that `POST /api/gemini/extract-asset-specs` returns valid JSON with serial, model, and specs.
+- Test setting location to "Blank" and verify it displays as "Unassigned" and filters properly.
+- Verify responsive layout on mobile (375px), tablet (768px), and desktop (1440px) viewports with zero horizontal overflow.
+- Run `compile_applet` and `lint_applet` to ensure error-free builds.

@@ -164,7 +164,7 @@ export const Header: React.FC = () => {
           </div>
 
           {/* Center: Primary Navigation Links (Clean, Spacious, Zero-Wrapping) */}
-          <nav className="hidden md:flex items-center gap-1 p-1 bg-[#161b22] border border-[#30363d] rounded-xl text-xs font-medium font-sans">
+          <nav className="hidden xl:flex items-center gap-1 p-1 bg-[#161b22] border border-[#30363d] rounded-xl text-xs font-medium font-sans">
             {/* 1. Modules Dropdown / Active Trigger */}
             <div className="relative">
               <button
@@ -375,7 +375,7 @@ export const Header: React.FC = () => {
             {/* Mobile Hamburger Drawer Trigger */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="md:hidden flex items-center justify-center p-2 rounded-lg bg-[#161b22] border border-[#30363d] text-gray-300 hover:text-white"
+              className="xl:hidden flex items-center justify-center p-2 rounded-lg bg-[#161b22] border border-[#30363d] text-gray-300 hover:text-white"
               aria-label="Toggle navigation menu"
             >
               {isMobileMenuOpen ? <X className="w-4 h-4 text-cyan-400" /> : <Menu className="w-4 h-4" />}
@@ -551,9 +551,9 @@ export const Header: React.FC = () => {
           </div>
         </div>
 
-        {/* Mobile Navigation Drawer */}
+        {/* Mobile / Responsive Navigation Drawer */}
         {isMobileMenuOpen && (
-          <div className="md:hidden bg-[#161b22] border-b border-[#30363d] px-4 py-3 space-y-3 animate-in slide-in-from-top-2 duration-150">
+          <div className="xl:hidden bg-[#161b22] border-b border-[#30363d] px-4 py-3 space-y-3 animate-in slide-in-from-top-2 duration-150">
             <div className="text-[11px] font-mono text-gray-400 uppercase tracking-wider">
               Bench Diagnostic Tools
             </div>

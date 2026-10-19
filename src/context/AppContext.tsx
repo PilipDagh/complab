@@ -147,6 +147,8 @@ interface AppContextType {
   setActiveScannedAsset: (asset: HardwareAsset | null) => void;
   isScannerModalOpen: boolean;
   setIsScannerModalOpen: (open: boolean) => void;
+  isPhotoAutofillModalOpen: boolean;
+  setIsPhotoAutofillModalOpen: (open: boolean) => void;
   lookupHardwareAsset: (assetTagOrId: string) => Promise<HardwareAsset | null>;
   saveHardwareAsset: (asset: HardwareAsset) => Promise<void>;
   addAssetRepairLog: (assetId: string, log: Omit<AssetRepairLog, 'id' | 'date'>) => Promise<void>;
@@ -249,6 +251,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [hardwareAssets, setHardwareAssets] = useState<HardwareAsset[]>(INITIAL_HARDWARE_ASSETS);
   const [activeScannedAsset, setActiveScannedAsset] = useState<HardwareAsset | null>(null);
   const [isScannerModalOpen, setIsScannerModalOpen] = useState<boolean>(false);
+  const [isPhotoAutofillModalOpen, setIsPhotoAutofillModalOpen] = useState<boolean>(false);
 
   // Time Clock & Shift Task Logs State
   const [timeClockEntries, setTimeClockEntries] = useState<TimeClockEntry[]>(INITIAL_TIME_CLOCK_ENTRIES);
@@ -1731,6 +1734,8 @@ Previous Repairs: ${activeScannedAsset.repairHistory.map((r) => `[${r.date}] ${r
         setActiveScannedAsset,
         isScannerModalOpen,
         setIsScannerModalOpen,
+        isPhotoAutofillModalOpen,
+        setIsPhotoAutofillModalOpen,
         lookupHardwareAsset,
         saveHardwareAsset,
         addAssetRepairLog,

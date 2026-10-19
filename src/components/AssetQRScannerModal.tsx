@@ -30,12 +30,15 @@ import {
   Server,
   Radio,
   FileText,
+  Sparkles,
 } from 'lucide-react';
 
 export const AssetQRScannerModal: React.FC = () => {
   const {
     isScannerModalOpen,
     setIsScannerModalOpen,
+    isPhotoAutofillModalOpen,
+    setIsPhotoAutofillModalOpen,
     hardwareAssets,
     activeScannedAsset,
     setActiveScannedAsset,
@@ -475,6 +478,17 @@ export const AssetQRScannerModal: React.FC = () => {
             >
               <Search className="w-3.5 h-3.5" />
               <span>Manual Search</span>
+            </button>
+            <button
+              onClick={() => {
+                setIsScannerModalOpen(false);
+                setIsPhotoAutofillModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-all bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-sm"
+              title="Take photos of serial sticker & QR tag to autofill specs"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>AI Photo Autofill</span>
             </button>
           </div>
 

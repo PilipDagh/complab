@@ -36,6 +36,7 @@ import {
   FileText,
   SlidersHorizontal,
   ChevronDown,
+  Camera,
 } from 'lucide-react';
 
 const COMMON_PROBLEM_PRESETS = [
@@ -52,6 +53,7 @@ const COMMON_PROBLEM_PRESETS = [
 ];
 
 const BENCH_LOCATIONS = [
+  'Blank (Unassigned)',
   'Bench #1',
   'Bench #2',
   'Bench #3',
@@ -92,6 +94,8 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
     addToast,
     setIsScannerModalOpen,
     setActiveScannedAsset,
+    isPhotoAutofillModalOpen,
+    setIsPhotoAutofillModalOpen,
   } = useApp();
 
   // Search & Filtering State
@@ -114,7 +118,7 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
   const [newModel, setNewModel] = useState<string>('');
   const [newSerial, setNewSerial] = useState<string>('');
   const [newDeviceType, setNewDeviceType] = useState<HardwareAsset['deviceType']>('Desktop Tower');
-  const [newBench, setNewBench] = useState<string>('Bench #1');
+  const [newBench, setNewBench] = useState<string>('Blank (Unassigned)');
   const [newDepartment, setNewDepartment] = useState<string>('Vocational IT Lab');
   const [newStatus, setNewStatus] = useState<HardwareAsset['status']>('In Service');
   const [newIsOnHand, setNewIsOnHand] = useState<boolean>(true);
@@ -156,8 +160,21 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
       // 3. Device Type Filter
       if (filterDeviceType !== 'ALL' && asset.deviceType !== filterDeviceType) return false;
 
-      // 4. Bench Filter
-      if (filterBench !== 'ALL' && asset.assignedBench !== filterBench) return false;
+      // 4. Bench / Location Filter (with Unassigned / Blank support)
+      if (filterBench !== 'ALL') {
+        const isBlank =
+          !asset.assignedBench ||
+          asset.assignedBench === 'Unassigned' ||
+          asset.assignedBench === 'Blank' ||
+          asset.assignedBench.includes('Blank');
+        if (filterBench === 'UNASSIGNED') {
+          if (!isBlank) return false;
+        } else if (filterBench === 'Blank (Unassigned)') {
+          if (!isBlank) return false;
+        } else if (asset.assignedBench !== filterBench) {
+          return false;
+        }
+      }
 
       // 5. Query Search
       if (!searchQuery.trim()) return true;
@@ -192,6 +209,13 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
   const problemsCount = hardwareAssets.filter((a) => a.problemLabel?.hasProblem || a.status === 'Under Repair').length;
   const healthyCount = hardwareAssets.filter((a) => (a.isCurrentlyOnHand ?? true) && !a.problemLabel?.hasProblem && a.status === 'In Service').length;
   const spareCount = hardwareAssets.filter((a) => a.status === 'Spare Inventory').length;
+  const unassignedCount = hardwareAssets.filter(
+    (a) =>
+      !a.assignedBench ||
+      a.assignedBench === 'Unassigned' ||
+      a.assignedBench === 'Blank' ||
+      a.assignedBench.includes('Blank')
+  ).length;
 
   // Toggle Currently Have (On-Hand) state
   const handleToggleOnHand = async (asset: HardwareAsset) => {
@@ -396,7 +420,10 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
       serialNumber: newSerial.trim() || `SN-${Math.floor(100000 + Math.random() * 900000)}`,
       model: newModel.trim(),
       deviceType: newDeviceType,
-      assignedBench: newBench,
+      assignedBench:
+        newBench === 'Blank (Unassigned)' || newBench === 'Blank' || !newBench
+          ? 'Unassigned'
+          : newBench,
       department: newDepartment,
       status: newHasProblem ? 'Under Repair' : newStatus,
       isCurrentlyOnHand: newIsOnHand,
@@ -517,6 +544,15 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
 
           <div className="flex items-center gap-2 flex-wrap">
             <button
+              onClick={() => setIsPhotoAutofillModalOpen(true)}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-mono font-bold text-xs shadow-md shadow-cyan-950/40 border border-cyan-400/30 flex items-center gap-1.5 transition-all"
+              title="Snap photos of bottom sticker or QR code and auto-fill specs"
+            >
+              <Camera className="w-4 h-4" />
+              <span>Snap & Autofill (AI Vision)</span>
+            </button>
+
+            <button
               onClick={() => setIsAddModalOpen(true)}
               className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-mono font-bold text-xs shadow-md shadow-emerald-950/40 border border-emerald-400/30 flex items-center gap-1.5 transition-all"
             >
@@ -544,8 +580,8 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
           </div>
         </div>
 
-        {/* 5-Card At-A-Glance Metric Strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-5 pt-4 border-t border-[#30363d]">
+        {/* 6-Card At-A-Glance Metric Strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-5 pt-4 border-t border-[#30363d]">
           {/* 1. Total Assets */}
           <div className="bg-[#0d1117] p-3 rounded-xl border border-[#30363d]">
             <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider block">
@@ -561,12 +597,12 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
           <div className="bg-[#0d1117] p-3 rounded-xl border border-emerald-500/30 relative overflow-hidden">
             <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
             <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-wider block font-semibold">
-              Currently On Hand
+              On Hand (In Lab)
             </span>
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-xl font-bold font-mono text-emerald-300">{onHandCount}</span>
               <span className="text-[10px] font-mono text-gray-400">
-                {totalAssets > 0 ? `${Math.round((onHandCount / totalAssets) * 100)}% in lab` : '0%'}
+                {totalAssets > 0 ? `${Math.round((onHandCount / totalAssets) * 100)}%` : '0%'}
               </span>
             </div>
           </div>
@@ -580,33 +616,52 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
               </span>
             )}
             <span className="text-[10px] font-mono text-red-400 uppercase tracking-wider block font-semibold">
-              Marked With Problem
+              Marked Problem
             </span>
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-xl font-bold font-mono text-red-300">{problemsCount}</span>
-              <span className="text-[10px] font-mono text-gray-400">Needs Triage</span>
+              <span className="text-[10px] font-mono text-gray-400">Triage</span>
             </div>
           </div>
 
           {/* 4. Healthy / In Service */}
           <div className="bg-[#0d1117] p-3 rounded-xl border border-cyan-500/30">
             <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-wider block">
-              In Service (Ready)
+              In Service
             </span>
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-xl font-bold font-mono text-cyan-300">{healthyCount}</span>
-              <span className="text-[10px] font-mono text-gray-500">100% Functional</span>
+              <span className="text-[10px] font-mono text-gray-500">Ready</span>
             </div>
           </div>
 
           {/* 5. Spare Stock */}
-          <div className="bg-[#0d1117] p-3 rounded-xl border border-[#30363d] col-span-2 sm:col-span-1">
+          <div className="bg-[#0d1117] p-3 rounded-xl border border-[#30363d]">
             <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider block">
-              Spare Inventory
+              Spare Stock
             </span>
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-xl font-bold font-mono text-amber-300">{spareCount}</span>
-              <span className="text-[10px] font-mono text-gray-500">On Shelves</span>
+              <span className="text-[10px] font-mono text-gray-500">Shelves</span>
+            </div>
+          </div>
+
+          {/* 6. Unassigned / Blank Location */}
+          <div
+            onClick={() => setFilterBench(filterBench === 'UNASSIGNED' ? 'ALL' : 'UNASSIGNED')}
+            className={`p-3 rounded-xl border transition-all cursor-pointer ${
+              filterBench === 'UNASSIGNED'
+                ? 'bg-amber-950/40 border-amber-400 ring-1 ring-amber-400/40'
+                : 'bg-[#0d1117] border-[#30363d] hover:border-gray-500'
+            }`}
+            title="Click to toggle filter for unassigned assets"
+          >
+            <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider block">
+              Unassigned Loc
+            </span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-xl font-bold font-mono text-amber-300">{unassignedCount}</span>
+              <span className="text-[10px] font-mono text-gray-500">Blank Loc</span>
             </div>
           </div>
         </div>
@@ -658,6 +713,7 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
               className="px-3 py-2.5 rounded-xl bg-[#0d1117] border border-[#30363d] text-white focus:outline-none focus:border-cyan-500 text-xs"
             >
               <option value="ALL">All Bench Locations</option>
+              <option value="UNASSIGNED">Unassigned / Blank Location ({unassignedCount})</option>
               {BENCH_LOCATIONS.map((b) => (
                 <option key={b} value={b}>
                   {b}
@@ -762,6 +818,21 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
           >
             Healthy / In Service ({healthyCount})
           </button>
+
+          <span className="text-gray-600 px-1">|</span>
+
+          {/* Unassigned Quick Filter Chip */}
+          <button
+            onClick={() => setFilterBench(filterBench === 'UNASSIGNED' ? 'ALL' : 'UNASSIGNED')}
+            className={`px-3 py-1 rounded-lg border transition-all whitespace-nowrap flex items-center gap-1 ${
+              filterBench === 'UNASSIGNED'
+                ? 'bg-amber-600 text-white font-bold border-amber-500'
+                : 'bg-[#0d1117] border-[#30363d] text-amber-400 hover:text-white'
+            }`}
+          >
+            <Layers className="w-3 h-3 text-amber-400" />
+            <span>Unassigned ({unassignedCount})</span>
+          </button>
         </div>
       </div>
 
@@ -834,7 +905,23 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
                   <div className="flex items-center justify-between text-[11px] pt-1 border-t border-[#30363d]/60">
                     <span className="text-gray-400 flex items-center gap-1">
                       <Wrench className="w-3 h-3 text-cyan-400" />
-                      <span className="text-gray-300 font-semibold">{asset.assignedBench}</span>
+                      <span
+                        className={
+                          !asset.assignedBench ||
+                          asset.assignedBench === 'Unassigned' ||
+                          asset.assignedBench === 'Blank' ||
+                          asset.assignedBench.includes('Blank')
+                            ? 'text-amber-400/80 italic font-medium'
+                            : 'text-gray-300 font-semibold'
+                        }
+                      >
+                        {!asset.assignedBench ||
+                        asset.assignedBench === 'Unassigned' ||
+                        asset.assignedBench === 'Blank' ||
+                        asset.assignedBench.includes('Blank')
+                          ? 'Unassigned'
+                          : asset.assignedBench}
+                      </span>
                     </span>
 
                     {/* ON-HAND PRESENCE TOGGLE BUTTON */}
@@ -998,8 +1085,24 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
                       </td>
 
                       {/* Location */}
-                      <td className="p-3 text-gray-300 whitespace-nowrap">
-                        {asset.assignedBench}
+                      <td className="p-3 whitespace-nowrap">
+                        <span
+                          className={
+                            !asset.assignedBench ||
+                            asset.assignedBench === 'Unassigned' ||
+                            asset.assignedBench === 'Blank' ||
+                            asset.assignedBench.includes('Blank')
+                              ? 'text-amber-400/80 italic font-medium'
+                              : 'text-gray-300'
+                          }
+                        >
+                          {!asset.assignedBench ||
+                          asset.assignedBench === 'Unassigned' ||
+                          asset.assignedBench === 'Blank' ||
+                          asset.assignedBench.includes('Blank')
+                            ? 'Unassigned'
+                            : asset.assignedBench}
+                        </span>
                       </td>
 
                       {/* Presence Toggle */}
@@ -1125,6 +1228,27 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
                 className="text-gray-400 hover:text-white p-1"
               >
                 ✕
+              </button>
+            </div>
+
+            {/* AI Vision Intake Option Banner */}
+            <div className="shrink-0 bg-gradient-to-r from-cyan-950/40 via-blue-950/30 to-[#0d1117] p-2.5 rounded-xl border border-cyan-500/30 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
+                <span className="text-[11px] text-cyan-200">
+                  Have a laptop with barcode, QR, or serial stickers?
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddModalOpen(false);
+                  setIsPhotoAutofillModalOpen(true);
+                }}
+                className="px-3 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[10px] flex items-center gap-1 shrink-0 shadow-sm"
+              >
+                <Camera className="w-3 h-3" />
+                <span>Snap & Autofill with AI</span>
               </button>
             </div>
 
@@ -1416,8 +1540,8 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
 
       {/* MODAL 2: PROBLEM LABELER MODAL */}
       {problemModalAsset && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-[#161b22] border border-red-500/60 rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4 font-mono text-xs my-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto">
+          <div className="bg-[#161b22] border border-red-500/60 rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4 font-mono text-xs my-auto max-h-[90vh] overflow-y-auto flex flex-col">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 flex items-center justify-center">
