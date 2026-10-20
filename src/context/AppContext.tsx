@@ -12,6 +12,8 @@ import {
   TimeClockTaskCategory,
   ComLabWorkstation,
   ComLabLayoutConfig,
+  LabJobRole,
+  ThemeMode,
 } from '../types';
 import {
   INITIAL_USERS,
@@ -67,7 +69,8 @@ export type AppTab =
   | 'calendar'
   | 'assets'
   | 'time_clock'
-  | 'comlab';
+  | 'comlab'
+  | 'manual';
 
 export interface ToastMessage {
   id: string;
@@ -185,6 +188,23 @@ interface AppContextType {
   resetComLabToSchoolDefaults: () => Promise<void>;
   simulateTelemetryHeartbeat: (workstationId: string) => Promise<void>;
 
+  // Theme & Appearance
+  themeMode: ThemeMode;
+  setThemeMode: (mode: ThemeMode) => void;
+  toggleTheme: () => void;
+  isSettingsModalOpen: boolean;
+  setIsSettingsModalOpen: (open: boolean) => void;
+
+  // Interactive Onboarding Tour
+  isTourOpen: boolean;
+  setIsTourOpen: (open: boolean) => void;
+  startTour: () => void;
+  closeTour: (markAsCompleted?: boolean) => void;
+  hasSeenTour: boolean;
+
+  // Job Role Management (Teacher / Admin)
+  updateUserJobs: (userId: string, jobs: LabJobRole[]) => Promise<void>;
+
   // Toast
   toasts: ToastMessage[];
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
@@ -292,6 +312,99 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const removeToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  // Theme & Appearance State
+  const [themeMode, setThemeModeState] = useState<ThemeMode>(() => {
+    try {
+      const saved = localStorage.getItem('trade_tech_active_theme');
+      if (saved === 'high_contrast_light' || saved === 'dark_industrial') {
+        return saved as ThemeMode;
+      }
+    } catch (e) {
+      console.warn('Failed reading theme preference', e);
+    }
+    return 'dark_industrial';
+  });
+
+  const setThemeMode = (mode: ThemeMode) => {
+    setThemeModeState(mode);
+    try {
+      localStorage.setItem('trade_tech_active_theme', mode);
+      document.documentElement.classList.toggle('theme-high-contrast-light', mode === 'high_contrast_light');
+      document.documentElement.classList.toggle('theme-dark-industrial', mode === 'dark_industrial');
+    } catch (e) {
+      console.warn('Failed saving theme preference', e);
+    }
+  };
+
+  const toggleTheme = () => {
+    setThemeMode(themeMode === 'dark_industrial' ? 'high_contrast_light' : 'dark_industrial');
+  };
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('theme-high-contrast-light', themeMode === 'high_contrast_light');
+    document.documentElement.classList.toggle('theme-dark-industrial', themeMode === 'dark_industrial');
+  }, [themeMode]);
+
+  // Settings Modal State
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
+
+  // Interactive Onboarding Tour State
+  const [hasSeenTour, setHasSeenTour] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('trade_tech_tour_completed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [isTourOpen, setIsTourOpen] = useState<boolean>(false);
+
+  // Auto-launch tour on first visit after slight delay
+  useEffect(() => {
+    try {
+      const seen = localStorage.getItem('trade_tech_tour_completed') === 'true';
+      if (!seen) {
+        const timer = setTimeout(() => {
+          setIsTourOpen(true);
+        }, 900);
+        return () => clearTimeout(timer);
+      }
+    } catch {
+      // safe fallback
+    }
+  }, []);
+
+  const startTour = () => {
+    setIsTourOpen(true);
+  };
+
+  const closeTour = (markAsCompleted = true) => {
+    setIsTourOpen(false);
+    if (markAsCompleted) {
+      try {
+        localStorage.setItem('trade_tech_tour_completed', 'true');
+        setHasSeenTour(true);
+      } catch (e) {
+        console.warn('Failed saving tour completed flag', e);
+      }
+    }
+  };
+
+  // Job Role Management (Teacher / Admin)
+  const updateUserJobs = async (userId: string, jobs: LabJobRole[]) => {
+    setUsers((prev) =>
+      prev.map((u) => (u.id === userId ? { ...u, assignedJobs: jobs } : u))
+    );
+    if (currentUser?.id === userId) {
+      setCurrentUser((prev) => (prev ? { ...prev, assignedJobs: jobs } : null));
+    }
+    addToast({
+      type: 'success',
+      title: 'Lab Duty Updated',
+      message: `Updated vocational role assignments for technician.`,
+    });
   };
 
   // Helper to format usernames into standard email addresses for Firebase Auth
@@ -1759,6 +1872,22 @@ Previous Repairs: ${activeScannedAsset.repairHistory.map((r) => `[${r.date}] ${r
         updateComLabLayout,
         resetComLabToSchoolDefaults,
         simulateTelemetryHeartbeat,
+        // Theme & Appearance
+        themeMode,
+        setThemeMode,
+        toggleTheme,
+        isSettingsModalOpen,
+        setIsSettingsModalOpen,
+
+        // Interactive Tour
+        isTourOpen,
+        setIsTourOpen,
+        startTour,
+        closeTour,
+        hasSeenTour,
+
+        // Roles
+        updateUserJobs,
 
         toasts,
         addToast,

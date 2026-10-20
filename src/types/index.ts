@@ -1,5 +1,18 @@
 export type UserRole = 'ROLE_OWNER' | 'ROLE_WORKER' | 'ROLE_STUDENT';
 
+export type LabJobRole =
+  | 'team_safety_manager'
+  | 'foreman'
+  | 'ambassador'
+  | 'environment_manager'
+  | 'asset_manager'
+  | 'clock_in_manager'
+  | 'cart_management'
+  | 'teacher'
+  | 'jobless';
+
+export type ThemeMode = 'dark_industrial' | 'high_contrast_light';
+
 export interface User {
   id: string;
   username: string;
@@ -11,6 +24,8 @@ export interface User {
   clockedIn?: boolean;
   clockInTime?: string;
   currentTask?: string;
+  assignedJobs?: LabJobRole[];
+  isTeacher?: boolean;
 }
 
 export interface DiagnosticOption {

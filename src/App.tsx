@@ -17,6 +17,10 @@ import { SignalIntegritySuite } from './components/SignalIntegritySuite';
 import { AssetInventoryManager } from './components/AssetInventoryManager';
 import { TechnicianTimeClockSuite } from './components/TechnicianTimeClockSuite';
 import { ComLabStatusSuite } from './components/comlab/ComLabStatusSuite';
+import { LabManualGuide } from './components/LabManualGuide';
+import { RoleQuickActionsBar } from './components/RoleQuickActionsBar';
+import { SettingsModal } from './components/SettingsModal';
+import { OnboardingTour } from './components/OnboardingTour';
 import { Toast } from './components/Toast';
 import {
   ShieldCheck,
@@ -55,6 +59,9 @@ const MainContent: React.FC = () => {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-4 lg:p-6 space-y-6">
+        {/* Role Quick Actions Bar for Active Technician Duty */}
+        <RoleQuickActionsBar />
+
         {/* Render Tab Views */}
         {activeTab === 'board_triage' && <BoardLevelTriage />}
         {activeTab === 'networking' && <NetworkSysadminSuite />}
@@ -68,6 +75,7 @@ const MainContent: React.FC = () => {
         {activeTab === 'calendar' && <LabCalendar />}
         {activeTab === 'assets' && <AssetInventoryManager />}
         {activeTab === 'time_clock' && <TechnicianTimeClockSuite />}
+        {activeTab === 'manual' && <LabManualGuide />}
       </main>
 
       {/* Bench Station Status Footer */}
@@ -98,13 +106,15 @@ const MainContent: React.FC = () => {
         </div>
       </footer>
 
-      {/* Modals and Toasts */}
+      {/* Modals, Tour, and Toasts */}
       <AuthModal />
       <AssetQRScannerModal />
       <AssetPhotoAutofillModal
         isOpen={isPhotoAutofillModalOpen}
         onClose={() => setIsPhotoAutofillModalOpen(false)}
       />
+      <SettingsModal />
+      <OnboardingTour />
       <Toast />
     </div>
   );

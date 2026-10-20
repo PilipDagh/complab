@@ -1,136 +1,111 @@
-# Multi-Photo AI Asset Autofill, Responsive UI Polish & Blank Location Support
+# Implementation Plan: Interactive Welcome Tour, Lab Manual Tab, Role Specialization (Mr. McKismic), and Theme Engine
 
-Automates hardware asset registration through multi-photo visual capture (camera and file upload) with Gemini multimodal extraction of QR codes, serial numbers, make/model, and hardware specs, paired with a responsive screen-fitting UI overhaul and optional "Blank" (Unassigned) location categorization.
-
-### User Review & Critical Decisions
-
-> [!IMPORTANT]
-> The following product decisions were confirmed during the interactive interview and will guide this implementation:
-
-- **Confirmed Decision 1 (Photo Capture & Input)**: Support both real-time device camera capture (continuous snapshot mode for front/back/bottom labels) and multi-photo file upload, allowing technicians to snap bottom labels, serial stickers, and QR tags in one session.
-- **Confirmed Decision 2 (AI Auto-Fill & Review Flow)**: Extracted specs (Serial Number, Model/Make, CPU, RAM, Storage, Device Type, OS) will instantly autofill directly into the intake form with visual green highlight glows on scanned fields, leaving the technician only to mark any problem status and enter non-tech notes.
-- **Confirmed Decision 3 (Blank Location Behavior)**: Support a first-class "Blank" option in the location selector, represented cleanly as "Unassigned" across inventory tables, filter bars, and card badges, with a dedicated quick-filter tag to easily isolate unassigned assets.
-- **Confirmed Decision 4 (Screen-Fitting UI Layout)**: Fix all overflowing containers, modal max-height clamps, and cramped controls so the entire dashboard and asset workflow fit comfortably within any viewport (mobile, tablet, desktop) without broken horizontal scrollbars or clipping.
+Build an interactive spotlight onboarding tour, a comprehensive and accessible "Manual" tab, role-based quick action toolbars based on the FETC vocational lab duty roster, Mr. McKismic teacher management features, and a Settings modal with a theme switcher supporting Dark Industrial and High Contrast Light modes.
 
 ---
 
-### 1. Overview & Core Concept
-
-- **What It Does**: Technicians and vocational students frequently intake laptops and hardware units with small stickers, QR codes, barcode labels, and technical specs. Instead of manually typing long serial numbers and technical specs, users take 1 to 4 photos (e.g. laptop top lid, bottom regulatory sticker, barcode/QR sticker, BIOS/spec screen). Gemini 3.8 / 3.1 Flash analyzes all photos collectively, extracts the model, serial number, regulatory tag, device classification, and technical specifications, and fills the form instantly. The user then simply selects or marks whether the unit has a problem (using 1-click CompTIA presets) and enters optional bench notes.
-- **Target Audience / Persona**: Vocational instructors (Julian), student technicians, and lab assistants at Fred W. Eberle Technical Center managing hundreds of laptops and lab units.
-- **Key Value**: Drastically reduces intake triage time from 5 minutes down to 15 seconds per laptop, eliminates manual typing errors on serial numbers, and provides a clean, glitch-free dashboard that fits perfectly on workshop laptops, tablets, and phones.
-
----
-
-### 2. User Experience & Visual Design
-
-#### Key User Flows
-1. **Initiate Asset Registration**: In the Asset Inventory tab, click the enhanced **"Add New Asset"** or **"Snap & Autofill (AI Lens)"** action.
-2. **Multi-Photo Capture & Staging**:
-   - Technician selects **Live Camera** (with toggle for front/rear camera and capture button) or clicks **Upload Photos** to drag/drop multiple photos of the laptop bottom, serial plate, and QR codes.
-   - Thumbnails display with individual remove buttons and a prominent **"Analyze & Autofill Specs"** button.
-3. **Multimodal AI Extraction**:
-   - The backend `/api/gemini/extract-asset-specs` processes the images using Gemini multimodal vision with structured JSON output.
-   - The intake form populates immediately: Model, Serial Number, Device Type (Laptop, Desktop, Switch), CPU, RAM, Storage, OS, and MAC/Regulatory ID.
-   - Fields populated by AI glow with a transient cyan/emerald accent border and an "AI Detected" indicator.
-4. **Technician Review & Problem Marking**:
-   - The technician verifies the detected fields, selects **Location** (including the new **"Blank / Unassigned"** default option), and marks whether the unit has an active problem using CompTIA problem presets (e.g., "Cracked Display", "No Power", "RAM Bit Flipping").
-5. **Save to Cloud**:
-   - Asset saves directly into Firestore/Cloud SQL state, updates inventory metrics in real-time, and displays a success toast.
-
-#### Visual Identity & Theme
-- **Aesthetic Direction**: High-precision vocational dark slate lab interface (`#0B0F19` canvas, `#161B26` containers, `#232D3F` hairline borders). Clean, utilitarian, anti-slop design.
-- **Color Palette**:
-  - Deep Neutral Canvas: `#0B0F19` (60%)
-  - Structural Cards & Surfaces: `#161B26` and `#1E2638` (30%)
-  - Functional Accents: Emerald (`#10B981`) for verified/healthy states, Cyan (`#38BDF8`) for AI vision scanning, Amber (`#F59E0B`) for warnings, Crimson (`#EF4444`) for critical defects (10% budget).
-- **Typography & Hierarchy**:
-  - Headers: Manrope / Plus Jakarta Sans font style (`font-sans font-bold`).
-  - Technical Data & Identifiers: Strictly tabular monospace (`font-mono tabular-nums`) for serial numbers, asset tags, bench numbers, and specs.
-- **Screen-Fitting Layout & Viewport Containment**:
-  - Fix modal containment with `max-h-[90vh] overflow-y-auto` and sticky headers/footers so modal action buttons are always reachable regardless of screen resolution.
-  - Responsive multi-column grid with `grid-cols-1 md:grid-cols-2 xl:grid-cols-3` that eliminates viewport blowout and horizontal document scroll.
-  - Compact row heights (40px) for tables with text truncation and tooltips.
+## 1. User Intent & Clarifications Summary
+- **Interactive Spotlight Onboarding Tour:** One-time game-style walkthrough with darkened backdrop spotlighting key UI controls, step-by-step explanations, "Next/Back/Skip", saved to `localStorage` (`has_seen_onboarding_tour`), with replay capability from the Manual and Settings.
+- **Dedicated "Manual" Tab:** In-depth, easy-to-read, visual field manual explaining every tab, module, tool, keyboard shortcut, and workflow with search, role guidelines, and quick jump links.
+- **Printed Job Assignments & Permissions:**
+  - Team Safety Manager (Xavier W.)
+  - Foreman (Jason F.)
+  - Ambasitor / Ambassador (Jason F.)
+  - Environment Manager (Katrina C., Bridget C.)
+  - Asset Manager (Katrina C., Bridget C.)
+  - Clock In Manager (Remington W.)
+  - Cart Management (Remington W.)
+  - Teacher Profile (Mr. McKismic): Instructor-level management over roster and role assignments.
+  - Jobless / General Technicians (Kylin, Tristan, etc.): Full, identical permissions to all site features, accompanied by general technician quick actions.
+  - Specialized Quick Action Toolbars: Give assigned roles 1-click access to specific tasks (audits, logs, scripts) without restricting other technicians from accessing tools normally.
+- **Theme Switcher & Settings Modal:**
+  - Settings button (gear icon) in the header opening a centralized Settings modal.
+  - Toggle between **Dark Industrial** (default) and **High Contrast Light** mode (for bright vocational classrooms and projectors).
+  - Presentation of 10 creative extra theme concepts for future customization.
 
 ---
 
-### 3. Key Product Decisions & Trade-Offs
+## 2. Proposed Changes & Architecture
 
-- **Decision 1: Server-Side Multimodal Gemini Extraction vs. Client OCR**:
-  - *Chosen Approach*: Route images to a dedicated server endpoint (`/api/gemini/extract-asset-specs`) using the `@google/genai` SDK with `gemini-3.8-flash` (or `gemini-3.1-flash-lite` fallback).
-  - *Why*: Laptop bottom stickers contain fragmented abbreviations (`S/N:`, `Service Tag:`, `Reg Model:`, `P/N:`, `16GB DDR5`, `i7-13700H`, QR/DataMatrix codes). Generic client OCR produces garbled strings; Gemini multimodal vision accurately parses layout context, decodes tiny barcodes/QR codes, and normalizes specs into structured JSON.
-  - *Security & Privacy*: API keys remain strictly server-side in accordance with the `@google/genai` guidelines.
-- **Decision 2: Location Handling with "Blank / Unassigned" Option**:
-  - *Chosen Approach*: Add `""` / `"Unassigned"` as the first option in the bench location dropdown and quick filters.
-  - *Why*: Allows technicians to register incoming stock or off-bench repairs that do not yet have a designated physical lab bench.
-- **Decision 3: Multi-Photo Batch Staging**:
-  - *Chosen Approach*: Technicians can take or upload up to 4 photos per asset (e.g. Lid photo, Bottom serial sticker, Port label, Screen/BIOS). All images are merged into a single multi-part prompt, enabling cross-referencing between the model name on the bezel and the serial code on the bottom label.
+### A. Types & Seed Data Updates (`src/types/index.ts` & `src/data/seedData.ts`)
+- Extend `User` interface:
+  - `assignedJobs: LabJobRole[]`
+  - `isTeacher?: boolean`
+- Define `LabJobRole`:
+  - `'team_safety_manager'` | `'foreman'` | `'ambassador'` | `'environment_manager'` | `'asset_manager'` | `'clock_in_manager'` | `'cart_management'` | `'teacher'` | `'jobless'`
+- Update `INITIAL_USERS`:
+  - Add **Mr. McKismic** (`id: 'user_teacher_mckismic'`, `displayName: 'Mr. McKismic'`, `role: 'ROLE_OWNER'`, `isTeacher: true`)
+  - Update Xavier W. with `assignedJobs: ['team_safety_manager']`
+  - Update Jason F. with `assignedJobs: ['foreman', 'ambassador']`
+  - Update Katrina C. with `assignedJobs: ['environment_manager', 'asset_manager']`
+  - Update Bridget C. with `assignedJobs: ['environment_manager', 'asset_manager']`
+  - Update Remington W. with `assignedJobs: ['clock_in_manager', 'cart_management']`
+  - Ensure Kylin, Tristan, etc., have `assignedJobs: ['jobless']`
+
+### B. One-Time Interactive Welcome Spotlight Tour (`src/components/OnboardingTour.tsx`)
+- High-tech SVG/canvas-backed spotlight overlay that darkens the background and highlights current target DOM elements (`data-tour-target`).
+- Step sequence:
+  1. Header & Lab Status
+  2. 6 Vocational Engineering Modules
+  3. Diagnostic Wizard & Reference
+  4. ComLab Digital Twin
+  5. Asset Inventory & AI Photo Autofill
+  6. Technician Profile & Specialized Quick Actions
+  7. Settings & Theme Switcher
+- Controls: "Next", "Back", "Skip", "Finish".
+- State persistence in `localStorage`: `trade_tech_tour_completed`.
+- Can be re-triggered anytime via `openTour()` in `AppContext`.
+
+### C. Dedicated Lab Field Manual & Guidebook Tab (`src/components/LabManualGuide.tsx`)
+- Add `'manual'` to `AppTab` in `AppContext`.
+- Clean, searchable, modular documentation:
+  - **Quick Start & Core Workflow:** How to intake assets, run diagnostics, and clock in.
+  - **Lab Duty Roster & Role Playbook:** Details each job from the printed sheet, duties, checklists, and quick tools.
+  - **Vocational Modules (1–6):** Comprehensive guides for Board Triage, SysAdmin CLI, CompTIA Certs, Floor Operations, Forensics, and Signals.
+  - **ComLab Spatial Twin Guide:** Controls, row layouts, and status LED color meanings.
+  - **AI Camera Intake Guide:** How to snap bottom QR/serial stickers for instant autofill.
+  - **Teacher & Instructor Guide:** Classroom control, assigning roles, student progress tracking.
+  - **Interactive Tour Launcher:** One-click button to restart the spotlight tour.
+
+### D. Specialized Quick Action Toolbars (`src/components/RoleQuickActionsBar.tsx`)
+- Render a dynamic, non-intrusive quick-action bar tailored to the currently active user's assigned role(s):
+  - **Safety Manager:** ESD wrist strap checklist, chemical fume check, 1-click hazard report.
+  - **Foreman:** Priority task dispatch, active technician overview, shift briefing alert.
+  - **Ambassador:** Visitor greeting log, lab tour talking points, welcome broadcast.
+  - **Environment Manager:** Temperature & humidity check, bench cleanliness audit.
+  - **Asset Manager:** 1-click camera autofill intake, unassigned assets triage, QR label printer.
+  - **Clock In Manager:** Attendance roll call, station assignment sync, late audit.
+  - **Cart Management:** Laptop Cart 1 & 2 charging check, cable locks check, return audit.
+  - **Teacher (Mr. McKismic):** Teacher Console modal to modify student jobs, view class participation, and reset lab states.
+  - **Jobless / General Tech:** Quick launch for Diagnostic Wizard, AI Copilot, and Spec Reference.
+
+### E. Settings Modal & Theme Engine (`src/components/SettingsModal.tsx` & `src/context/AppContext.tsx`)
+- Header Gear icon button that opens the Settings modal.
+- Active theme options:
+  - **Dark Industrial (Default):** Deep slate `#0d1117`, cyan/emerald LED accents, brushed metal aesthetic.
+  - **High Contrast Light:** Crisp pure white/light gray background, dark high-contrast typography, vivid deep navy/emerald accents optimized for classroom projection and brightly lit tech labs.
+- Persist selected theme in `localStorage` (`trade_tech_active_theme`).
+- List the **10 Extra Theme Concepts** inside the settings panel with previews:
+  1. *Cyberpunk 2077 Neon* (Vivid magenta, cyan, deep obsidian)
+  2. *Amber CRT Terminal (DEC VT220)* (Monochrome retro phosphorus amber)
+  3. *Matrix Hacker Green (Phosphor 80s)* (Classic IBM green-screen terminal)
+  4. *Clean Architectural Whiteboard* (Technical marker styling on clean slate)
+  5. *Solarized Dark IDE* (Classic Ethan Schoonover color theory)
+  6. *Deep Ocean Submarine* (Navy blue, bioluminescent cyan, sonar radar pings)
+  7. *Stealth Monokai Pro* (Warm charcoal with pastel syntax highlights)
+  8. *Draftsman Blueprint Cyan* (Cad cyan gridlines on dark architectural navy)
+  9. *Sunset Synthwave 1984* (Neon purple, warm orange, retro gradient wireframes)
+  10. *Minimalist E-Ink Monochrome* (Ultra-clean grayscale distraction-free paper)
 
 ---
 
-### 4. Technical Architecture & Data Strategy
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        TradeTech Client UI                             │
-│                                                                        │
-│  ┌───────────────────────┐          ┌───────────────────────────────┐  │
-│  │ AssetInventoryManager │          │   AssetPhotoAutofillModal     │  │
-│  │ - Unassigned Filter   │ ◄─────── │   - Live Camera Stream        │  │
-│  │ - Screen-Fit Grid/List│          │   - Multi-Photo File Drop     │  │
-│  │ - Quick Problem Marks │          │   - Highlighted Spec Review   │  │
-│  └───────────────────────┘          └───────────────┬───────────────┘  │
-└─────────────────────────────────────────────────────┼──────────────────┘
-                                                      │ POST Base64 Photos
-                                                      ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                     Node.js / Express Server                           │
-│                                                                        │
-│   POST /api/gemini/extract-asset-specs                                 │
-│   ┌────────────────────────────────────────────────────────────────┐   │
-│   │ GoogleGenAI SDK (gemini-3.8-flash / gemini-3.1-flash-lite)      │   │
-│   │ Structured JSON Schema Response:                               │   │
-│   │ {                                                              │   │
-│   │   make, model, serialNumber, deviceType, cpu, ram, storage,    │   │
-│   │   gpu, macAddress, os, detectedConditionHint                   │   │
-│   │ }                                                              │   │
-│   └────────────────────────────────┬───────────────────────────────┘   │
-└────────────────────────────────────┼───────────────────────────────────┘
-                                     │
-                                     ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                     Firestore & Local Storage Sync                     │
-│   Collection: hardwareAssets                                           │
-│   - assignedBench: "" | "Unassigned" | "Bench #X"                      │
-│   - problemLabel: { hasProblem, problemTitle, severity, description }  │
-│   - specs: { cpu, ram, storage, gpu, macAddress, os }                  │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-#### Detailed Implementation Scope
-1. **Server Endpoint (`server.ts`)**:
-   - Add `POST /api/gemini/extract-asset-specs` accepting an array of base64 image strings.
-   - Build a specialized prompt instructing Gemini to parse manufacturer branding (Dell, Lenovo, HP, Apple, Cisco, Asus, Acer), serial numbers (`S/N`, `Service Tag`, `Serial`, `SN`), QR code contents, MAC addresses, and technical specs.
-   - Enforce structured JSON response schema (`Type.OBJECT`) for deterministic client parsing.
-2. **Asset Model & Schema (`src/types/index.ts`)**:
-   - Ensure `HardwareAsset['assignedBench']` cleanly accommodates `""` and `"Unassigned"`.
-   - Update `specs` and intake types to include any optional photo references.
-3. **Asset Intake & Autofill Component (`src/components/AssetPhotoAutofillModal.tsx` & `AssetInventoryManager.tsx`)**:
-   - Build camera viewfinder with frame guidelines for serial labels and QR codes.
-   - Multi-image dropzone with preview pills and delete buttons.
-   - Direct injection into form fields with animated pulse highlight for newly auto-filled fields.
-   - Location dropdown featuring `[ Blank / Unassigned ]` as a prominent option.
-   - Problem marker section with one-click CompTIA diagnostic presets.
-4. **UI Screen-Fitting & Layout Polish**:
-   - Overhaul `AssetInventoryManager.tsx` and all parent layout containers to use `w-full max-w-7xl mx-auto px-4 sm:px-6` with proper flex-wrap and responsive breakpoint handling (`xs`, `sm`, `md`, `lg`, `xl`).
-   - Fix all modal viewport constraints (`max-h-[85vh]` scrollable body with pinned header and footer actions).
-   - Add filter tag for `"Unassigned / Blank Location"` alongside `"On-Hand"`, `"Has Problem"`, and `"Healthy"`.
-
----
-
-### Verification & Testing Plan
-- Test camera capture and multi-photo file upload with real sample laptop labels.
-- Verify that `POST /api/gemini/extract-asset-specs` returns valid JSON with serial, model, and specs.
-- Test setting location to "Blank" and verify it displays as "Unassigned" and filters properly.
-- Verify responsive layout on mobile (375px), tablet (768px), and desktop (1440px) viewports with zero horizontal overflow.
-- Run `compile_applet` and `lint_applet` to ensure error-free builds.
+## 3. Verification & Acceptance Criteria
+1. **Interactive Tour:** Fires on first load on a fresh session, darkens background, highlights navigation items, advances smoothly, and marks as seen in `localStorage`.
+2. **Replay Tour:** Clicking "Restart Interactive Tour" from the Manual or Settings re-triggers the full tour without refreshing.
+3. **Lab Manual Tab:** Accessible via the top navigation, easily searchable, responsive on mobile and desktop, clearly explaining the whole system.
+4. **Duty Roster & Profiles:**
+   - Xavier W., Jason F., Katrina C., Bridget C., Remington W., and Mr. McKismic display their proper role badges and role tools.
+   - Jobless technicians retain full access to every website module and feature.
+   - Mr. McKismic profile has the Teacher Console to manage roles.
+5. **Theme Switcher:** Toggling between Dark Industrial and High Contrast Light immediately updates UI styling and persists across reloads.
+6. **Build Quality:** Runs `compile_applet` and `lint_applet` with zero TypeScript errors or lint issues.

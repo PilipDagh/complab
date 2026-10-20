@@ -33,6 +33,7 @@ import {
   Tag,
   Clock,
   Monitor,
+  Settings,
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -50,6 +51,7 @@ export const Header: React.FC = () => {
     hardwareAssets,
     timeClockEntries,
     setIsScannerModalOpen,
+    setIsSettingsModalOpen,
   } = useApp();
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -139,6 +141,7 @@ export const Header: React.FC = () => {
           {/* Left: Brand Identity */}
           <div className="flex items-center gap-3 flex-shrink-0">
             <button
+              data-tour="tour-brand"
               onClick={() => setActiveTab('board_triage')}
               className="flex items-center gap-2.5 text-left group"
             >
@@ -168,6 +171,7 @@ export const Header: React.FC = () => {
             {/* 1. Modules Dropdown / Active Trigger */}
             <div className="relative">
               <button
+                data-tour="tour-modules"
                 onClick={() => {
                   if (!isModuleTab) {
                     setActiveTab('board_triage');
@@ -299,6 +303,7 @@ export const Header: React.FC = () => {
 
             {/* 7. Hardware Assets & Inventory Tracker */}
             <button
+              data-tour="tour-assets"
               onClick={() => setActiveTab('assets')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
                 activeTab === 'assets'
@@ -333,6 +338,7 @@ export const Header: React.FC = () => {
 
             {/* 9. ComLab Status Aerial Lab Map */}
             <button
+              data-tour="tour-comlab"
               onClick={() => enterComLab()}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
                 activeTab === 'comlab'
@@ -342,12 +348,27 @@ export const Header: React.FC = () => {
               title="Aerial top-down view of computer rows A-D with blinking LED alerts"
             >
               <Monitor className="w-3.5 h-3.5 text-cyan-400" />
-              <span>ComLab Status</span>
+              <span>ComLab</span>
               <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
+            </button>
+
+            {/* 10. Vocational Lab Field Manual */}
+            <button
+              data-tour="tour-manual"
+              onClick={() => setActiveTab('manual')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                activeTab === 'manual'
+                  ? 'bg-[#21262d] text-white shadow-sm border border-[#30363d] text-cyan-300'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#21262d]/50'
+              }`}
+              title="Vocational Lab Field Manual & Documentation"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Manual</span>
             </button>
           </nav>
 
-          {/* Right: Quick Command Search + QR Scanner + User Profile + Mobile Hamburger */}
+          {/* Right: Quick Command Search + QR Scanner + Settings + User Profile + Mobile Hamburger */}
           <div className="flex items-center gap-2">
             {/* Quick Command Search Button (Cmd+K) */}
             <button
@@ -370,6 +391,17 @@ export const Header: React.FC = () => {
             >
               <QrCode className="w-3.5 h-3.5 text-emerald-400" />
               <span className="hidden sm:inline text-[11px] font-sans">QR Scan</span>
+            </button>
+
+            {/* Settings & Theme Switcher Button */}
+            <button
+              data-tour="tour-settings"
+              onClick={() => setIsSettingsModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] text-xs text-gray-300 hover:text-white transition-colors"
+              title="Website Settings & Theme Switcher"
+            >
+              <Settings className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden sm:inline text-[11px] font-sans">Settings</span>
             </button>
 
             {/* Mobile Hamburger Drawer Trigger */}
@@ -676,6 +708,32 @@ export const Header: React.FC = () => {
               >
                 <Monitor className="w-4 h-4 text-cyan-400" />
                 <span>ComLab Status (Aerial Top-Down Grid)</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab('manual');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex items-center gap-2 p-2 rounded-lg border text-left col-span-2 ${
+                  activeTab === 'manual'
+                    ? 'bg-cyan-950/40 border-cyan-500/50 text-cyan-300 font-bold'
+                    : 'bg-gray-900 border-gray-800 text-gray-300 hover:text-white'
+                }`}
+              >
+                <BookOpen className="w-4 h-4 text-cyan-400" />
+                <span>Lab Field Manual & Website Guide</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsSettingsModalOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="flex items-center justify-center gap-2 p-2 rounded-lg border border-gray-700 bg-gray-900 text-gray-200 hover:text-white text-xs col-span-2"
+              >
+                <Settings className="w-4 h-4 text-cyan-400" />
+                <span>Settings & Theme Switcher</span>
               </button>
 
               <button

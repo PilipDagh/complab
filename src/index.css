@@ -89,3 +89,83 @@ button, input, select, textarea {
 .animate-door-glow {
   animation: doorGlow 3s ease-in-out infinite;
 }
+
+/* ==========================================================================
+   HIGH CONTRAST LIGHT MODE (Classroom & Projector Accessibility)
+   ========================================================================== */
+html.theme-high-contrast-light {
+  color-scheme: light;
+}
+
+html.theme-high-contrast-light body {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+html.theme-high-contrast-light .min-h-screen {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+html.theme-high-contrast-light header {
+  background-color: #ffffff !important;
+  border-bottom-color: #cbd5e1 !important;
+}
+
+html.theme-high-contrast-light nav {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+}
+
+html.theme-high-contrast-light footer {
+  background-color: #e2e8f0 !important;
+  border-top-color: #cbd5e1 !important;
+  color: #1e293b !important;
+}
+
+html.theme-high-contrast-light .bg-\[\#0d1117\],
+html.theme-high-contrast-light .bg-\[\#0b0e14\],
+html.theme-high-contrast-light .bg-\[\#080c14\],
+html.theme-high-contrast-light .bg-\[\#111620\],
+html.theme-high-contrast-light .bg-\[\#161b22\],
+html.theme-high-contrast-light .bg-\[\#161d2b\],
+html.theme-high-contrast-light .bg-\[\#21262d\] {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+html.theme-high-contrast-light .border-\[\#30363d\],
+html.theme-high-contrast-light .border-\[\#232d3f\],
+html.theme-high-contrast-light .border-gray-800,
+html.theme-high-contrast-light .border-gray-700 {
+  border-color: #cbd5e1 !important;
+}
+
+html.theme-high-contrast-light .text-gray-200,
+html.theme-high-contrast-light .text-gray-300 {
+  color: #1e293b !important;
+}
+
+html.theme-high-contrast-light .text-gray-400,
+html.theme-high-contrast-light .text-gray-500 {
+  color: #475569 !important;
+}
+
+html.theme-high-contrast-light .text-white {
+  color: #0f172a !important;
+}
+
+html.theme-high-contrast-light input:not([type="checkbox"]):not([type="radio"]),
+html.theme-high-contrast-light select,
+html.theme-high-contrast-light textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #94a3b8 !important;
+}
+
+html.theme-high-contrast-light input::placeholder,
+html.theme-high-contrast-light textarea::placeholder {
+  color: #64748b !important;
+}
+
