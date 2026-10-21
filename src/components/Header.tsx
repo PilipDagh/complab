@@ -56,6 +56,7 @@ export const Header: React.FC = () => {
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showModulesDropdown, setShowModulesDropdown] = useState(false);
+  const [showMoreToolsDropdown, setShowMoreToolsDropdown] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -133,17 +134,109 @@ export const Header: React.FC = () => {
   const isModuleTab = MODULES_LIST.some((m) => m.tab === activeTab);
   const activeModuleItem = MODULES_LIST.find((m) => m.tab === activeTab);
 
+  const ALL_NAVIGATION_TABS: {
+    tab: AppTab;
+    label: string;
+    icon: React.ReactNode;
+    badge?: React.ReactNode;
+    tourId?: string;
+  }[] = [
+    {
+      tab: 'board_triage',
+      label: 'Board-Level Triage',
+      icon: <Zap className="w-3.5 h-3.5 text-cyan-400" />,
+      tourId: 'tour-modules',
+    },
+    {
+      tab: 'networking',
+      label: '02. Network & SysAdmin',
+      icon: <Network className="w-3.5 h-3.5 text-sky-400" />,
+    },
+    {
+      tab: 'vocational',
+      label: '03. CompTIA Certification',
+      icon: <GraduationCap className="w-3.5 h-3.5 text-emerald-400" />,
+    },
+    {
+      tab: 'lab_management',
+      label: '04. Lab Floor Operations',
+      icon: <LayoutGrid className="w-3.5 h-3.5 text-amber-400" />,
+    },
+    {
+      tab: 'forensics',
+      label: '05. Forensic & Firmware Lab',
+      icon: <HardDrive className="w-3.5 h-3.5 text-teal-400" />,
+    },
+    {
+      tab: 'signals',
+      label: '06. Signals & Oscilloscope',
+      icon: <Activity className="w-3.5 h-3.5 text-indigo-400" />,
+    },
+    {
+      tab: 'diagnostic',
+      label: 'Diagnostic Wizard',
+      icon: <Cpu className="w-3.5 h-3.5 text-blue-400" />,
+    },
+    {
+      tab: 'gemini',
+      label: 'AI Copilot',
+      icon: <Bot className="w-3.5 h-3.5 text-emerald-400" />,
+    },
+    {
+      tab: 'assets',
+      label: 'Hardware Assets',
+      icon: <Tag className="w-3.5 h-3.5 text-teal-400" />,
+      tourId: 'tour-assets',
+      badge: (
+        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30">
+          {hardwareAssets.length}
+        </span>
+      ),
+    },
+    {
+      tab: 'time_clock',
+      label: 'Time Clock',
+      icon: <Clock className="w-3.5 h-3.5 text-emerald-400" />,
+      badge: currentUser?.clockedIn ? (
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Clocked In"></span>
+      ) : undefined,
+    },
+    {
+      tab: 'comlab',
+      label: 'ComLab Aerial Twin',
+      icon: <Monitor className="w-3.5 h-3.5 text-cyan-400" />,
+      tourId: 'tour-comlab',
+      badge: <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>,
+    },
+    {
+      tab: 'manual',
+      label: 'Field Manual',
+      icon: <BookOpen className="w-3.5 h-3.5 text-cyan-400" />,
+      tourId: 'tour-manual',
+    },
+    {
+      tab: 'reference',
+      label: 'Bench Reference',
+      icon: <BookOpen className="w-3.5 h-3.5 text-purple-400" />,
+    },
+    {
+      tab: 'calendar',
+      label: 'Lab Calendar',
+      icon: <Calendar className="w-3.5 h-3.5 text-amber-400" />,
+    },
+  ];
+
   return (
     <>
       <header className="sticky top-0 z-40 bg-[#0d1117]/95 backdrop-blur-md border-b border-[#30363d] transition-all">
-        {/* Tier 1: Main Header Bar */}
-        <div className="max-w-7xl mx-auto px-4 lg:px-6 h-14 flex items-center justify-between gap-3">
+        {/* Tier 1: Main Header Bar (Matching user screenshot) */}
+        <div className="w-full px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
           {/* Left: Brand Identity */}
           <div className="flex items-center gap-3 flex-shrink-0">
             <button
               data-tour="tour-brand"
               onClick={() => setActiveTab('board_triage')}
-              className="flex items-center gap-2.5 text-left group"
+              className="flex items-center gap-2.5 text-left group shrink-0"
             >
               <div className="relative flex items-center justify-center w-8 h-8 rounded-lg bg-[#161b22] border border-[#30363d] shadow-sm text-[#38bdf8] group-hover:border-cyan-500/50 transition-colors">
                 <Terminal className="w-4 h-4" />
@@ -166,356 +259,96 @@ export const Header: React.FC = () => {
             </button>
           </div>
 
-          {/* Center: Primary Navigation Links (Clean, Spacious, Zero-Wrapping) */}
-          <nav className="hidden xl:flex items-center gap-1 p-1 bg-[#161b22] border border-[#30363d] rounded-xl text-xs font-medium font-sans">
-            {/* 1. Modules Dropdown / Active Trigger */}
-            <div className="relative">
-              <button
-                data-tour="tour-modules"
-                onClick={() => {
-                  if (!isModuleTab) {
-                    setActiveTab('board_triage');
-                  }
-                  setShowModulesDropdown(!showModulesDropdown);
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                  isModuleTab
-                    ? 'bg-[#21262d] text-white shadow-sm border border-[#30363d] text-cyan-300'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#21262d]/50'
-                }`}
-              >
-                <Zap className="w-3.5 h-3.5 text-cyan-400" />
-                <span>
-                  {activeModuleItem ? `${activeModuleItem.number}. ${activeModuleItem.shortLabel}` : 'Bench Modules'}
-                </span>
-                <ChevronDown className="w-3 h-3 text-gray-500" />
-              </button>
-
-              {/* Modules Dropdown Popover */}
-              {showModulesDropdown && (
-                <div
-                  className="absolute left-0 mt-2 w-64 rounded-xl bg-[#161b22] border border-[#30363d] shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-100"
-                  onClick={() => setShowModulesDropdown(false)}
-                >
-                  <div className="px-2.5 py-1.5 border-b border-[#30363d] mb-1">
-                    <p className="text-[11px] font-mono text-gray-400 uppercase tracking-wider">
-                      Vocational Modules (1–6)
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    {MODULES_LIST.map((mod) => (
-                      <button
-                        key={mod.tab}
-                        onClick={() => {
-                          setActiveTab(mod.tab);
-                          setShowModulesDropdown(false);
-                        }}
-                        className={`w-full flex items-center justify-between p-2 rounded-lg text-xs text-left transition-colors ${
-                          activeTab === mod.tab
-                            ? 'bg-[#21262d] text-white font-semibold'
-                            : 'text-gray-300 hover:bg-[#21262d]/60 hover:text-white'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          {mod.icon}
-                          <span>
-                            {mod.number}. {mod.label}
-                          </span>
-                        </div>
-                        {activeTab === mod.tab && <Check className="w-3.5 h-3.5 text-cyan-400" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* 2. Diagnostic Wizard */}
-            <button
-              onClick={() => setActiveTab('diagnostic')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                activeTab === 'diagnostic'
-                  ? 'bg-[#21262d] text-white shadow-sm border border-[#30363d] text-blue-400'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#21262d]/50'
-              }`}
-            >
-              <Cpu className="w-3.5 h-3.5 text-blue-400" />
-              <span>Wizard</span>
-            </button>
-
-            {/* 3. Bench Reference */}
-            <button
-              onClick={() => setActiveTab('reference')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                activeTab === 'reference'
-                  ? 'bg-[#21262d] text-white shadow-sm border border-[#30363d] text-purple-400'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#21262d]/50'
-              }`}
-            >
-              <BookOpen className="w-3.5 h-3.5 text-purple-400" />
-              <span>Reference</span>
-            </button>
-
-            {/* 4. Gemini AI Assistant */}
-            <button
-              onClick={() => setActiveTab('gemini')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                activeTab === 'gemini'
-                  ? 'bg-[#21262d] text-white shadow-sm border border-[#30363d] text-emerald-400'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#21262d]/50'
-              }`}
-            >
-              <Bot className="w-3.5 h-3.5 text-emerald-400" />
-              <span>AI Copilot</span>
-            </button>
-
-            {/* 5. PC Parts Inventory Direct Link */}
-            <button
-              onClick={() => setActiveTab('lab_management')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                activeTab === 'lab_management'
-                  ? 'bg-[#21262d] text-white shadow-sm border border-[#30363d] text-amber-300'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#21262d]/50'
-              }`}
-            >
-              <Package className="w-3.5 h-3.5 text-amber-400" />
-              <span>Parts</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                {INITIAL_PARTS_INVENTORY.length}
-              </span>
-            </button>
-
-            {/* 6. Lab Calendar & Workstation Clock-In */}
-            <button
-              onClick={() => setActiveTab('calendar')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                activeTab === 'calendar'
-                  ? 'bg-[#21262d] text-white shadow-sm border border-[#30363d] text-amber-400'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#21262d]/50'
-              }`}
-            >
-              <Calendar className="w-3.5 h-3.5 text-amber-400" />
-              <span>Calendar</span>
-              {currentUser?.clockedIn && (
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Clocked In"></span>
-              )}
-            </button>
-
-            {/* 7. Hardware Assets & Inventory Tracker */}
-            <button
-              data-tour="tour-assets"
-              onClick={() => setActiveTab('assets')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                activeTab === 'assets'
-                  ? 'bg-[#21262d] text-white shadow-sm border border-[#30363d] text-teal-300'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#21262d]/50'
-              }`}
-              title="Track on-hand assets, mark problems & manage inventory"
-            >
-              <Tag className="w-3.5 h-3.5 text-teal-400" />
-              <span>Assets</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30">
-                {hardwareAssets.length}
-              </span>
-            </button>
-
-            {/* 8. Technician Time Clock & Activity Logger */}
-            <button
-              onClick={() => setActiveTab('time_clock')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                activeTab === 'time_clock'
-                  ? 'bg-[#21262d] text-white shadow-sm border border-[#30363d] text-emerald-300'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#21262d]/50'
-              }`}
-              title="Punch in/out, log shift tasks & view timesheets"
-            >
-              <Clock className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Time Clock</span>
-              {currentUser?.clockedIn && (
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Currently Clocked In"></span>
-              )}
-            </button>
-
-            {/* 9. ComLab Status Aerial Lab Map */}
-            <button
-              data-tour="tour-comlab"
-              onClick={() => enterComLab()}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                activeTab === 'comlab'
-                  ? 'bg-[#21262d] text-white shadow-sm border border-[#30363d] text-cyan-300'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#21262d]/50'
-              }`}
-              title="Aerial top-down view of computer rows A-D with blinking LED alerts"
-            >
-              <Monitor className="w-3.5 h-3.5 text-cyan-400" />
-              <span>ComLab</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
-            </button>
-
-            {/* 10. Vocational Lab Field Manual */}
-            <button
-              data-tour="tour-manual"
-              onClick={() => setActiveTab('manual')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                activeTab === 'manual'
-                  ? 'bg-[#21262d] text-white shadow-sm border border-[#30363d] text-cyan-300'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#21262d]/50'
-              }`}
-              title="Vocational Lab Field Manual & Documentation"
-            >
-              <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Manual</span>
-            </button>
-          </nav>
-
-          {/* Right: Quick Command Search + QR Scanner + Settings + User Profile + Mobile Hamburger */}
-          <div className="flex items-center gap-2">
-            {/* Quick Command Search Button (Cmd+K) */}
-            <button
-              onClick={() => setIsCommandPaletteOpen(true)}
-              className="hidden lg:flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] text-xs text-gray-400 hover:text-gray-200 transition-colors"
-              title="Search tools and diagnostics (Cmd+K)"
-            >
-              <Search className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="text-[11px] font-sans">Search tools...</span>
-              <kbd className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-black/50 border border-gray-700 text-gray-400">
-                ⌘K
-              </kbd>
-            </button>
-
+          {/* Right: QR Scan + Settings + Hamburger + Profiles + Sign In */}
+          <div className="flex items-center gap-2 shrink-0">
             {/* Quick QR Scanner Trigger Button */}
             <button
               onClick={() => setIsScannerModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] text-xs text-gray-300 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] text-xs font-mono text-gray-200 hover:text-white transition-colors shrink-0 shadow-sm"
               title="Scan Asset QR Code"
             >
-              <QrCode className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden sm:inline text-[11px] font-sans">QR Scan</span>
+              <QrCode className="w-4 h-4 text-emerald-400" />
+              <span>QR Scan</span>
             </button>
 
             {/* Settings & Theme Switcher Button */}
             <button
               data-tour="tour-settings"
               onClick={() => setIsSettingsModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] text-xs text-gray-300 hover:text-white transition-colors"
+              className="flex items-center justify-center p-2 rounded-lg bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] text-cyan-400 hover:text-cyan-300 transition-colors shrink-0 shadow-sm"
               title="Website Settings & Theme Switcher"
+              aria-label="Settings"
             >
-              <Settings className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden sm:inline text-[11px] font-sans">Settings</span>
+              <Settings className="w-4 h-4" />
             </button>
 
-            {/* Mobile Hamburger Drawer Trigger */}
+            {/* Hamburger Drawer Trigger */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="xl:hidden flex items-center justify-center p-2 rounded-lg bg-[#161b22] border border-[#30363d] text-gray-300 hover:text-white"
+              className="flex items-center justify-center p-2 rounded-lg bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] text-gray-300 hover:text-white transition-colors shrink-0 shadow-sm"
+              title="Toggle Navigation Menu Drawer"
               aria-label="Toggle navigation menu"
             >
               {isMobileMenuOpen ? <X className="w-4 h-4 text-cyan-400" /> : <Menu className="w-4 h-4" />}
             </button>
 
-            {/* Top-Right Auth Dropdown & Profile Picker */}
+            {/* Profiles Button */}
+            <button
+              onClick={() => openAuthModal('profiles_menu')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161b22] hover:bg-[#21262d] border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 hover:text-white text-xs font-mono transition-all shadow-sm group shrink-0"
+              title="Switch Technician Profiles"
+            >
+              <Users className="w-4 h-4 text-cyan-400 group-hover:scale-105 transition-transform" />
+              <span>Profiles</span>
+              <span className="px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-mono border border-cyan-500/30">
+                {users.length}
+              </span>
+            </button>
+
+            {/* Sign In / Active User Profile */}
             {currentUser ? (
-              <div className="flex items-center gap-1.5">
-                {/* Profile Switcher button in login area */}
+              <div className="relative shrink-0">
                 <button
-                  onClick={() => openAuthModal('profiles_menu')}
-                  className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] hover:border-cyan-500/50 text-cyan-400 hover:text-cyan-300 text-xs font-mono transition-colors shadow-sm"
-                  title="Switch to another technician profile"
+                  onClick={() => setShowUserDropdown(!showUserDropdown)}
+                  className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-[#161b22] border border-[#30363d] hover:border-gray-500 text-left transition-all shadow-sm"
                 >
-                  <Users className="w-3.5 h-3.5" />
-                  <span className="hidden xl:inline text-[11px]">Profiles</span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] bg-cyan-500/20 text-cyan-300 font-mono">
-                    {users.length}
-                  </span>
+                  <div
+                    className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold ${
+                      isOwner
+                        ? 'bg-gradient-to-br from-[#2ea043] to-[#238636] text-white shadow-sm'
+                        : 'bg-gradient-to-br from-[#38bdf8] to-blue-700 text-white'
+                    }`}
+                  >
+                    {currentUser.displayName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="hidden sm:block">
+                    <span className="text-xs font-medium text-gray-200 block leading-tight">
+                      {currentUser.displayName.split(' ')[0]}
+                    </span>
+                  </div>
+                  <ChevronDown className="w-3 h-3 text-gray-400" />
                 </button>
 
-                <div className="relative">
-                  <button
-                    onClick={() => setShowUserDropdown(!showUserDropdown)}
-                    className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-[#161b22] border border-[#30363d] hover:border-gray-500 text-left transition-all"
+                {/* User Profile Menu */}
+                {showUserDropdown && (
+                  <div
+                    className="absolute right-0 mt-2 w-64 rounded-xl bg-[#161b22] border border-[#30363d] shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-100"
+                    onClick={() => setShowUserDropdown(false)}
                   >
-                    <div
-                      className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold ${
-                        isOwner
-                          ? 'bg-gradient-to-br from-[#2ea043] to-[#238636] text-white shadow-sm'
-                          : 'bg-gradient-to-br from-[#38bdf8] to-blue-700 text-white'
-                      }`}
-                    >
-                      {currentUser.displayName.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="hidden sm:block">
-                      <span className="text-xs font-medium text-gray-200 block leading-tight">
-                        {currentUser.displayName.split(' ')[0]}
-                      </span>
-                    </div>
-                    <ChevronDown className="w-3 h-3 text-gray-400" />
-                  </button>
-
-                  {/* User Profile Menu */}
-                  {showUserDropdown && (
-                    <div
-                      className="absolute right-0 mt-2 w-64 rounded-xl bg-[#161b22] border border-[#30363d] shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-100"
-                      onClick={() => setShowUserDropdown(false)}
-                    >
-                      <div className="px-3 py-2 border-b border-[#30363d] mb-1">
-                        <p className="text-xs font-semibold text-white">{currentUser.displayName}</p>
-                        <p className="text-[11px] text-gray-400 font-mono truncate">@{currentUser.username}</p>
-                        <div className="mt-1 flex items-center gap-1 text-[10px] text-emerald-400 font-mono">
-                          <ShieldCheck className="w-3 h-3" />
-                          Role: {isOwner ? '👑 Master Admin (Lead)' : '🛠️ Workstation Tech (Worker)'}
-                        </div>
+                    <div className="px-3 py-2 border-b border-[#30363d] mb-1">
+                      <p className="text-xs font-semibold text-white">{currentUser.displayName}</p>
+                      <p className="text-[11px] text-gray-400 font-mono truncate">@{currentUser.username}</p>
+                      <div className="mt-1 flex items-center gap-1 text-[10px] text-emerald-400 font-mono">
+                        <ShieldCheck className="w-3 h-3" />
+                        Role: {isOwner ? '👑 Master Admin (Lead)' : '🛠️ Workstation Tech (Worker)'}
                       </div>
+                    </div>
 
-                      <div className="py-1">
-                        <div className="flex items-center justify-between px-2 mb-1">
-                          <p className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">
-                            Switch Profile:
-                          </p>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowUserDropdown(false);
-                              openAuthModal('profiles_menu');
-                            }}
-                            className="text-[10px] font-mono text-cyan-400 hover:text-cyan-300 hover:underline flex items-center gap-0.5"
-                          >
-                            <span>All ({users.length})</span>
-                            <span>→</span>
-                          </button>
-                        </div>
-                        <div className="max-h-44 overflow-y-auto space-y-0.5 custom-scrollbar pr-1">
-                          {users.map((u) => (
-                            <button
-                              key={u.id}
-                              onClick={() => switchUserQuick(u.id)}
-                              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
-                                u.id === currentUser.id
-                                  ? 'bg-[#21262d] text-white font-medium'
-                                  : 'text-gray-300 hover:bg-[#21262d]/50'
-                              }`}
-                            >
-                              <div className="flex items-center gap-1.5 truncate">
-                                <span className="truncate">{u.displayName}</span>
-                                {u.benchStation && (
-                                  <span className="text-[9px] text-gray-500 font-mono">({u.benchStation.replace('Bench ', 'B')})</span>
-                                )}
-                              </div>
-                              <span
-                                className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
-                                  u.role === 'ROLE_OWNER'
-                                    ? 'bg-emerald-500/20 text-[#2ea043] border border-emerald-500/30'
-                                    : 'bg-sky-500/20 text-[#38bdf8] border border-sky-500/30'
-                                }`}
-                              >
-                                {u.role === 'ROLE_OWNER' ? 'Admin' : 'Worker'}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="border-t border-[#30363d] pt-1 mt-1 space-y-0.5">
+                    <div className="py-1">
+                      <div className="flex items-center justify-between px-2 mb-1">
+                        <p className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">
+                          Switch Profile:
+                        </p>
                         <button
                           type="button"
                           onClick={(e) => {
@@ -523,69 +356,130 @@ export const Header: React.FC = () => {
                             setShowUserDropdown(false);
                             openAuthModal('profiles_menu');
                           }}
-                          className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-cyan-300 hover:text-white hover:bg-[#21262d] rounded-lg transition-colors font-mono"
+                          className="text-[10px] font-mono text-cyan-400 hover:text-cyan-300 hover:underline flex items-center gap-0.5"
                         >
-                          <Users className="w-3.5 h-3.5 text-cyan-400" />
-                          Browse Profiles Menu ({users.length})
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowUserDropdown(false);
-                            openAuthModal('signup');
-                          }}
-                          className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-gray-300 hover:text-white hover:bg-[#21262d] rounded-lg transition-colors font-mono"
-                        >
-                          <UserCheck className="w-3.5 h-3.5 text-blue-400" />
-                          Register New Account
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowUserDropdown(false);
-                            logoutUser();
-                          }}
-                          className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-red-400 hover:bg-red-500/10 rounded-lg transition-colors font-mono"
-                        >
-                          <LogOut className="w-3.5 h-3.5" />
-                          Sign Out
+                          <span>All ({users.length})</span>
+                          <span>→</span>
                         </button>
                       </div>
+                      <div className="max-h-44 overflow-y-auto space-y-0.5 custom-scrollbar pr-1">
+                        {users.map((u) => (
+                          <button
+                            key={u.id}
+                            onClick={() => switchUserQuick(u.id)}
+                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
+                              u.id === currentUser.id
+                                ? 'bg-[#21262d] text-white font-medium'
+                                : 'text-gray-300 hover:bg-[#21262d]/50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span className="truncate">{u.displayName}</span>
+                              {u.benchStation && (
+                                <span className="text-[9px] text-gray-500 font-mono">({u.benchStation.replace('Bench ', 'B')})</span>
+                              )}
+                            </div>
+                            <span
+                              className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
+                                u.role === 'ROLE_OWNER'
+                                  ? 'bg-emerald-500/20 text-[#2ea043] border border-emerald-500/30'
+                                  : 'bg-sky-500/20 text-[#38bdf8] border border-sky-500/30'
+                              }`}
+                            >
+                              {u.role === 'ROLE_OWNER' ? 'Admin' : 'Worker'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  )}
-                </div>
+
+                    <div className="border-t border-[#30363d] pt-1 mt-1 space-y-0.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowUserDropdown(false);
+                          openAuthModal('profiles_menu');
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-cyan-300 hover:text-white hover:bg-[#21262d] rounded-lg transition-colors font-mono"
+                      >
+                        <Users className="w-3.5 h-3.5 text-cyan-400" />
+                        Browse Profiles Menu ({users.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowUserDropdown(false);
+                          openAuthModal('signup');
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-gray-300 hover:text-white hover:bg-[#21262d] rounded-lg transition-colors font-mono"
+                      >
+                        <UserCheck className="w-3.5 h-3.5 text-blue-400" />
+                        Register New Account
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowUserDropdown(false);
+                          logoutUser();
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-red-400 hover:bg-red-500/10 rounded-lg transition-colors font-mono"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        Sign Out
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="flex items-center gap-1.5">
-                {/* Dedicated Profile button in login area */}
-                <button
-                  onClick={() => openAuthModal('profiles_menu')}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#161b22] hover:bg-[#21262d] border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 hover:text-white text-xs font-mono transition-all shadow-sm group"
-                  title="Switch to technician profile (Julian, Kylin, Jason, Tristan, Xaiver, Remington, Katrina, Bridget)"
-                >
-                  <Users className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform" />
-                  <span>Profiles</span>
-                  <span className="px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-mono border border-cyan-500/30">
-                    {users.length}
-                  </span>
-                </button>
-                <button
-                  onClick={() => openAuthModal('login')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition-colors"
-                >
-                  <LogIn className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Sign In</span>
-                </button>
-              </div>
+              <button
+                onClick={() => openAuthModal('login')}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#238636] hover:bg-[#2ea043] text-white text-xs font-semibold shadow-sm transition-colors shrink-0"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Sign In</span>
+              </button>
             )}
           </div>
         </div>
 
-        {/* Mobile / Responsive Navigation Drawer */}
+        {/* Tier 2: Sub-Navigation Horizontal Strip (Matching user screenshot) */}
+        <div className="bg-[#0b0e14] border-t border-[#30363d]/80 px-4 sm:px-6 overflow-x-auto">
+          <div className="flex items-center gap-1 sm:gap-2 min-w-max py-2 text-xs">
+            {ALL_NAVIGATION_TABS.map((item) => {
+              const isActive = activeTab === item.tab;
+              return (
+                <button
+                  key={item.tab}
+                  data-tour={item.tourId}
+                  onClick={() => {
+                    if (item.tab === 'comlab') {
+                      enterComLab();
+                    } else {
+                      setActiveTab(item.tab);
+                    }
+                  }}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${
+                    isActive
+                      ? 'text-white font-semibold bg-[#161b22]/90 shadow-sm'
+                      : 'text-gray-400 hover:text-gray-200 font-medium hover:bg-[#161b22]/50'
+                  }`}
+                >
+                  {item.icon}
+                  <span>{item.label}</span>
+                  {item.badge}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Navigation Menu Drawer / Quick Launcher (works when hamburger is clicked) */}
         {isMobileMenuOpen && (
-          <div className="xl:hidden bg-[#161b22] border-b border-[#30363d] px-4 py-3 space-y-3 animate-in slide-in-from-top-2 duration-150">
+          <div className="bg-[#161b22] border-b border-[#30363d] px-4 sm:px-6 py-4 space-y-4 animate-in slide-in-from-top-2 duration-150 shadow-2xl">
             <div className="text-[11px] font-mono text-gray-400 uppercase tracking-wider">
               Bench Diagnostic Tools
             </div>
@@ -776,34 +670,6 @@ export const Header: React.FC = () => {
           </div>
         )}
 
-        {/* Tier 2: Dedicated Bench Modules Sub-Nav Strip (Visible when in any module or on desktop) */}
-        <div className="border-t border-[#30363d]/80 bg-[#0d1117] px-4 lg:px-6 py-1.5">
-          <div className="max-w-7xl mx-auto flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth">
-            <span className="text-[11px] font-mono text-gray-500 uppercase tracking-wider mr-2 hidden xl:inline flex-shrink-0">
-              Diagnostic Suites:
-            </span>
-            {MODULES_LIST.map((mod) => {
-              const isActive = activeTab === mod.tab;
-              return (
-                <button
-                  key={mod.tab}
-                  onClick={() => setActiveTab(mod.tab)}
-                  className={`flex items-center gap-2 px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex-shrink-0 ${
-                    isActive
-                      ? `${mod.color} border shadow-sm font-semibold`
-                      : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b22] border border-transparent'
-                  }`}
-                >
-                  {mod.icon}
-                  <span>
-                    <span className="font-mono text-[10px] opacity-75 mr-1">{mod.number}.</span>
-                    {mod.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
       </header>
 
       {/* Global Command Palette Modal (Cmd+K) */}

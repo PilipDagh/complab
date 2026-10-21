@@ -26,6 +26,9 @@ import {
   Thermometer,
   Layers,
   Cpu,
+  Award,
+  ShieldCheck,
+  CheckCheck,
 } from 'lucide-react';
 
 export const RoleQuickActionsBar: React.FC = () => {
@@ -38,12 +41,30 @@ export const RoleQuickActionsBar: React.FC = () => {
     updateUserJobs,
     timeClockEntries,
     hardwareAssets,
+    updateHardwareAsset,
     addToast,
     saveCalendarLog,
   } = useApp();
 
   // Active Sub-Modals
   const [activeModal, setActiveModal] = useState<string | null>(null);
+
+  // Quality Assurance (Julian & Kylin) State
+  const [selectedQaAssetId, setSelectedQaAssetId] = useState<string>('');
+  const [qaNotes, setQaNotes] = useState('');
+  const [qaStampOutcome, setQaStampOutcome] = useState<'Passed' | 'Needs Rework'>('Passed');
+  const [qaChecklist, setQaChecklist] = useState({
+    physicalCasingClean: true,
+    thermalPasteAndCoolers: true,
+    cableManagementTied: true,
+    allPortsFunctional: true,
+    ramAndStorageTested: true,
+    postAndBiosClean: true,
+    osAndDriversInstalled: true,
+    esdSafetyChecked: true,
+    stressBenchmarkPassed: true,
+    assetTagAffixed: true,
+  });
 
   // Safety Audit State
   const [esdChecked, setEsdChecked] = useState(true);
@@ -132,6 +153,12 @@ export const RoleQuickActionsBar: React.FC = () => {
       color: 'border-emerald-500/50 bg-emerald-950/30 text-emerald-300 font-bold',
       desc: 'Master classroom authority, assign student roles, and review lab stats',
     },
+    quality_assurance: {
+      label: 'Quality Assurance Inspector',
+      icon: <Award className="w-4 h-4 text-amber-400" />,
+      color: 'border-amber-500/50 bg-amber-950/30 text-amber-300 font-bold',
+      desc: '10-point final hardware checkoff, official pass/fail stamp, and digital verification seal',
+    },
     jobless: {
       label: 'General Technician',
       icon: <Wrench className="w-4 h-4 text-gray-400" />,
@@ -205,7 +232,7 @@ export const RoleQuickActionsBar: React.FC = () => {
       >
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           {/* User & Role Badge Identity */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0 shadow-inner">
               {isTeacher ? (
                 <GraduationCap className="w-5 h-5 text-emerald-400" />
@@ -214,9 +241,9 @@ export const RoleQuickActionsBar: React.FC = () => {
               )}
             </div>
 
-            <div>
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-bold text-white text-xs sm:text-sm">
+                <span className="font-bold text-white text-xs sm:text-sm truncate">
                   {currentUser ? currentUser.displayName : 'Guest Technician'}
                 </span>
                 <span className="text-[10px] text-gray-500">•</span>
@@ -230,7 +257,7 @@ export const RoleQuickActionsBar: React.FC = () => {
                   return (
                     <span
                       key={job}
-                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${cfg.color}`}
+                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${cfg.color} shrink-0`}
                     >
                       {cfg.icon}
                       <span>{cfg.label}</span>
@@ -239,7 +266,7 @@ export const RoleQuickActionsBar: React.FC = () => {
                 })}
               </div>
 
-              <p className="text-[11px] text-gray-400 mt-0.5">
+              <p className="text-[11px] text-gray-400 mt-0.5 truncate sm:whitespace-normal">
                 {isTeacher
                   ? 'Instructor Command: Full administrative supervision, student role management, and gradebook overrides.'
                   : 'Your assigned duty unlocks quick-action shortcuts below. You maintain 100% full access to all lab modules.'}
@@ -248,7 +275,7 @@ export const RoleQuickActionsBar: React.FC = () => {
           </div>
 
           {/* Quick Action Shortcuts depending on Role */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
             {/* TEACHER ROLE TOOLS */}
             {isTeacher && (
               <button
@@ -376,6 +403,47 @@ export const RoleQuickActionsBar: React.FC = () => {
                 <BatteryCharging className="w-3.5 h-3.5 text-cyan-400" />
                 <span>Laptop Cart #1 & #2 Audit</span>
               </button>
+            )}
+
+            {/* QUALITY ASSURANCE TOOLS (JULIAN & KYLIN) */}
+            {jobs.includes('quality_assurance') && (
+              <>
+                <button
+                  onClick={() => {
+                    const pendingAsset =
+                      hardwareAssets.find(
+                        (a) =>
+                          a.kanbanStage === 'qa_pending' ||
+                          a.status === 'Bench Testing' ||
+                          a.status === 'Under Repair'
+                      ) || hardwareAssets[0];
+                    if (pendingAsset) {
+                      setSelectedQaAssetId(pendingAsset.id || pendingAsset.assetTag);
+                    }
+                    setActiveModal('qa_inspection');
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-extrabold flex items-center gap-1.5 shadow-md shadow-amber-950/40 transition-transform active:scale-95"
+                >
+                  <Award className="w-4 h-4 text-black" />
+                  <span>
+                    QA Inspection & Seal (
+                    {
+                      hardwareAssets.filter(
+                        (a) => a.kanbanStage === 'qa_pending' || !a.qaReview
+                      ).length
+                    }{' '}
+                    Pending)
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('assets')}
+                  className="px-3 py-1.5 rounded-xl bg-[#161d2b] hover:bg-[#20293a] border border-[#232d3f] text-amber-300 hover:text-white flex items-center gap-1.5 transition-colors"
+                >
+                  <Layers className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Kanban Workflow</span>
+                </button>
+              </>
             )}
 
             {/* GENERAL TECHNICIAN / JOBLESS TOOLS */}
@@ -869,6 +937,310 @@ export const RoleQuickActionsBar: React.FC = () => {
               >
                 Save Cart Audit
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: QUALITY ASSURANCE INSPECTION & SEAL (JULIAN & KYLIN) --- */}
+      {activeModal === 'qa_inspection' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-150 overflow-y-auto">
+          <div className="bg-[#111620] border-2 border-amber-500/60 rounded-2xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl space-y-4 font-mono text-xs my-6">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-[#30363d] pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/50 flex items-center justify-center shadow-inner">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm sm:text-base font-bold text-white tracking-wide">
+                      Quality Assurance Workbench
+                    </h3>
+                    <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded text-[10px] font-bold">
+                      Julian & Kylin QA Seal
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-400">
+                    Final 10-point diagnostic checklist & official digital pass/fail verification
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Target Asset Selector */}
+            <div className="bg-[#161d2b] border border-[#232d3f] p-3.5 rounded-xl space-y-2">
+              <label className="block text-gray-300 text-[11px] font-bold">
+                Select Hardware Asset for QA Inspection:
+              </label>
+              <select
+                value={selectedQaAssetId}
+                onChange={(e) => setSelectedQaAssetId(e.target.value)}
+                className="w-full bg-[#0d121c] border border-gray-700 rounded-lg px-3 py-2 text-white text-xs font-mono focus:border-amber-500 focus:outline-none"
+              >
+                {hardwareAssets.map((asset) => (
+                  <option key={asset.id || asset.assetTag} value={asset.id || asset.assetTag}>
+                    [{asset.assetTag}] {asset.model} • {asset.assignedBench} • Current:{' '}
+                    {asset.qaReview ? `QA ${asset.qaReview.status}` : 'Pending QA'}
+                  </option>
+                ))}
+              </select>
+
+              {/* Quick Details of selected asset */}
+              {(() => {
+                const target = hardwareAssets.find(
+                  (a) => (a.id || a.assetTag) === selectedQaAssetId
+                );
+                if (!target) return null;
+                return (
+                  <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1 border-t border-gray-800">
+                    <span>
+                      Type: <span className="text-gray-200">{target.deviceType}</span>
+                    </span>
+                    <span>
+                      SN: <span className="text-gray-200">{target.serialNumber}</span>
+                    </span>
+                    <span className="text-amber-400 font-semibold">
+                      Bench: {target.assignedBench}
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* 10-Point Checklist */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-200">
+                  10-Point Hardware Quality Checklist:
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setQaChecklist({
+                      physicalCasingClean: true,
+                      thermalPasteAndCoolers: true,
+                      cableManagementTied: true,
+                      allPortsFunctional: true,
+                      ramAndStorageTested: true,
+                      postAndBiosClean: true,
+                      osAndDriversInstalled: true,
+                      esdSafetyChecked: true,
+                      stressBenchmarkPassed: true,
+                      assetTagAffixed: true,
+                    })
+                  }
+                  className="text-[10px] text-amber-400 hover:text-amber-300 underline"
+                >
+                  Check All Points
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+                {[
+                  {
+                    key: 'physicalCasingClean',
+                    label: '1. Chassis Clean & Blow-Out',
+                    sub: 'No dust bunnies, loose screws, or cosmetic debris',
+                  },
+                  {
+                    key: 'thermalPasteAndCoolers',
+                    label: '2. Fresh Thermal Paste & Fans',
+                    sub: 'Heatsink torqued correctly; fan headers connected',
+                  },
+                  {
+                    key: 'cableManagementTied',
+                    label: '3. Cable Management Tied',
+                    sub: 'Zip/Velcro ties securing wires away from fan blades',
+                  },
+                  {
+                    key: 'allPortsFunctional',
+                    label: '4. I/O Ports Tested',
+                    sub: 'USB, HDMI/DP, 3.5mm audio, and Gigabit Ethernet verified',
+                  },
+                  {
+                    key: 'ramAndStorageTested',
+                    label: '5. RAM & Storage Integrity',
+                    sub: 'MemTest clean; CrystalDiskInfo/SMART health > 95%',
+                  },
+                  {
+                    key: 'postAndBiosClean',
+                    label: '6. Clean POST & UEFI Updated',
+                    sub: 'Correct date/time, TPM enabled, clean boot priority',
+                  },
+                  {
+                    key: 'osAndDriversInstalled',
+                    label: '7. OS & Driver Verification',
+                    sub: 'Clean device manager with zero yellow exclamation marks',
+                  },
+                  {
+                    key: 'esdSafetyChecked',
+                    label: '8. ESD Protocol Maintained',
+                    sub: 'Anti-static mat & ground wrist straps used during repair',
+                  },
+                  {
+                    key: 'stressBenchmarkPassed',
+                    label: '9. Thermal Stress Benchmark',
+                    sub: '15-min benchmark without thermal throttling or shutdown',
+                  },
+                  {
+                    key: 'assetTagAffixed',
+                    label: '10. QR Bench Sticker Affixed',
+                    sub: 'Physical scannable sticker attached for mobile spec lookup',
+                  },
+                ].map((item) => (
+                  <label
+                    key={item.key}
+                    className={`flex items-start gap-2.5 p-2 rounded-xl border transition-colors cursor-pointer select-none ${
+                      qaChecklist[item.key as keyof typeof qaChecklist]
+                        ? 'bg-amber-950/20 border-amber-500/40 text-amber-200'
+                        : 'bg-[#161d2b] border-[#232d3f] text-gray-400'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={qaChecklist[item.key as keyof typeof qaChecklist]}
+                      onChange={(e) =>
+                        setQaChecklist((prev) => ({
+                          ...prev,
+                          [item.key]: e.target.checked,
+                        }))
+                      }
+                      className="mt-0.5 rounded border-gray-700 text-amber-500 focus:ring-0"
+                    />
+                    <div className="min-w-0">
+                      <div className="font-bold text-[11px] leading-tight text-white">
+                        {item.label}
+                      </div>
+                      <div className="text-[10px] text-gray-400 leading-tight mt-0.5">
+                        {item.sub}
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* QA Notes & Sign-off comments */}
+            <div className="space-y-1">
+              <label className="block text-gray-300 text-[11px] font-bold">
+                Inspector Verification Log Notes:
+              </label>
+              <textarea
+                value={qaNotes}
+                onChange={(e) => setQaNotes(e.target.value)}
+                rows={2}
+                placeholder="e.g., Repasted with Arctic MX-6, stress tested at 68°C max. Clean Windows 11 Pro image deployed. Ready for lab deployment."
+                className="w-full bg-[#0d121c] border border-gray-700 rounded-lg p-2 text-white text-xs font-mono focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+
+            {/* Pass / Fail Stamp Radio */}
+            <div className="flex items-center gap-3 bg-[#161d2b] border border-[#232d3f] p-3 rounded-xl">
+              <span className="text-gray-300 font-bold text-xs">Official Determination:</span>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="qaOutcome"
+                  checked={qaStampOutcome === 'Passed'}
+                  onChange={() => setQaStampOutcome('Passed')}
+                  className="text-emerald-500 focus:ring-0"
+                />
+                <span className="font-bold text-emerald-400">PASSED (Issue Official Seal)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="qaOutcome"
+                  checked={qaStampOutcome === 'Needs Rework'}
+                  onChange={() => setQaStampOutcome('Needs Rework')}
+                  className="text-red-400 focus:ring-0"
+                />
+                <span className="font-bold text-red-400">NEEDS REWORK (Return to Bench)</span>
+              </label>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-between pt-2 border-t border-[#30363d]">
+              <div className="text-[11px] text-gray-400">
+                Signing Inspector: <span className="text-amber-400 font-bold">{currentUser?.displayName || 'Julian (QA)'}</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveModal(null)}
+                  className="px-3.5 py-1.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-mono"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const target = hardwareAssets.find(
+                      (a) => (a.id || a.assetTag) === selectedQaAssetId
+                    );
+                    if (!target) {
+                      addToast({
+                        type: 'error',
+                        title: 'No Asset Selected',
+                        message: 'Please choose an asset to apply QA verification.',
+                      });
+                      return;
+                    }
+
+                    const sealId = `TT-QA-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+                    const inspectorName = currentUser?.displayName || 'Julian (QA)';
+                    const now = new Date().toISOString();
+
+                    await updateHardwareAsset(target.id || target.assetTag, {
+                      qaReview: {
+                        status: qaStampOutcome,
+                        inspectedBy: inspectorName,
+                        inspectedAt: now,
+                        checklist: qaChecklist,
+                        notes: qaNotes.trim() || `Verified by ${inspectorName} during QA inspection`,
+                        sealId,
+                      },
+                      kanbanStage: qaStampOutcome === 'Passed' ? 'deployed' : 'repair',
+                      status: qaStampOutcome === 'Passed' ? 'In Service' : 'Under Repair',
+                    });
+
+                    addToast({
+                      type: qaStampOutcome === 'Passed' ? 'success' : 'warning',
+                      title:
+                        qaStampOutcome === 'Passed'
+                          ? `Official QA Seal Issued [${sealId}]`
+                          : `QA Returned to Bench`,
+                      message:
+                        qaStampOutcome === 'Passed'
+                          ? `${target.model} passed inspection by ${inspectorName} and is certified for lab deployment.`
+                          : `${target.model} flagged for rework by ${inspectorName}.`,
+                    });
+
+                    setActiveModal(null);
+                  }}
+                  className={`px-4 py-2 rounded-xl text-black font-extrabold flex items-center gap-2 text-xs font-mono transition-transform active:scale-95 shadow-lg ${
+                    qaStampOutcome === 'Passed'
+                      ? 'bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-400 shadow-amber-950/50'
+                      : 'bg-red-500 hover:bg-red-400 text-white shadow-red-950/50'
+                  }`}
+                >
+                  <Award className="w-4 h-4" />
+                  <span>
+                    {qaStampOutcome === 'Passed'
+                      ? 'Apply Official QA Seal Stamp'
+                      : 'Flag for Bench Rework'}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

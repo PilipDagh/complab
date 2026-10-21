@@ -8,6 +8,7 @@ export type LabJobRole =
   | 'asset_manager'
   | 'clock_in_manager'
   | 'cart_management'
+  | 'quality_assurance'
   | 'teacher'
   | 'jobless';
 
@@ -166,6 +167,30 @@ export interface AssetProblemLabel {
   reportedBy?: string;
 }
 
+export interface AssetQaChecklist {
+  physicalCasingClean: boolean;
+  thermalPasteAndCoolers: boolean;
+  cableManagementTied: boolean;
+  allPortsFunctional: boolean;
+  ramAndStorageTested: boolean;
+  postAndBiosClean: boolean;
+  osAndDriversInstalled: boolean;
+  esdSafetyChecked: boolean;
+  stressBenchmarkPassed: boolean;
+  assetTagAffixed: boolean;
+}
+
+export interface AssetQaReview {
+  status: 'Passed' | 'Needs Rework' | 'Pending Inspection';
+  inspectedBy: string;
+  inspectedAt: string;
+  checklist: AssetQaChecklist;
+  notes?: string;
+  sealId: string;
+}
+
+export type AssetKanbanStage = 'intake' | 'triage' | 'repair' | 'qa_pending' | 'deployed';
+
 export interface HardwareAsset {
   id: string; // Document ID (usually assetTag, e.g., "AST-DELL-7090")
   assetTag: string; // e.g. "AST-DELL-7090"
@@ -175,6 +200,7 @@ export interface HardwareAsset {
   assignedBench: string;
   department: string;
   status: 'In Service' | 'Under Repair' | 'Decommissioned' | 'Bench Testing' | 'Spare Inventory';
+  kanbanStage?: AssetKanbanStage; // Visual Kanban workflow stage
   isCurrentlyOnHand?: boolean; // Physical presence tracking: true if currently in lab / on bench
   problemLabel?: AssetProblemLabel; // Problem marker and diagnostic symptom label
   specs: {
@@ -189,6 +215,7 @@ export interface HardwareAsset {
     ipAddress?: string;
     firmwareVersion?: string;
   };
+  qaReview?: AssetQaReview;
   purchaseDate?: string;
   warrantyExpiry?: string;
   notes?: string;

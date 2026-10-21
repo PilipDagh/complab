@@ -44,6 +44,8 @@ import {
   updateProjectInFirestore,
   deleteProjectFromFirestore,
   fetchHardwareAssetsFromFirestore,
+  subscribeToHardwareAssets,
+  batchImportHardwareAssets,
   getHardwareAssetFromFirestore,
   saveHardwareAssetToFirestore,
   updateHardwareAssetInFirestore,
@@ -154,6 +156,8 @@ interface AppContextType {
   setIsPhotoAutofillModalOpen: (open: boolean) => void;
   lookupHardwareAsset: (assetTagOrId: string) => Promise<HardwareAsset | null>;
   saveHardwareAsset: (asset: HardwareAsset) => Promise<void>;
+  updateHardwareAsset: (assetId: string, updates: Partial<HardwareAsset>) => Promise<void>;
+  importHardwareAssets: (assets: HardwareAsset[]) => Promise<{ count: number }>;
   addAssetRepairLog: (assetId: string, log: Omit<AssetRepairLog, 'id' | 'date'>) => Promise<void>;
   deleteHardwareAsset: (assetId: string) => Promise<void>;
 
@@ -470,7 +474,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setProjects([]);
         }
 
-        // Fetch Hardware Assets from Firestore
+        // Initial fetch of Hardware Assets from Firestore
         const fsAssets = await fetchHardwareAssetsFromFirestore();
         if (fsAssets && fsAssets.length > 0) {
           setHardwareAssets(fsAssets);
@@ -514,6 +518,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     loadFirestoreData();
+
+    // Real-Time Cross-Device Sync: Subscribe to live changes in hardware_assets collection
+    const unsubscribeAssets = subscribeToHardwareAssets((remoteAssets) => {
+      if (remoteAssets && remoteAssets.length > 0) {
+        setHardwareAssets(remoteAssets);
+        setActiveScannedAsset((curr) => {
+          if (!curr) return null;
+          const found = remoteAssets.find((a) => a.id === curr.id || a.assetTag === curr.assetTag);
+          return found || curr;
+        });
+      }
+    });
+
+    return () => {
+      unsubscribeAssets();
+    };
   }, []);
 
   // Auth Operations
@@ -1013,7 +1033,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         message: `Hardware asset [${assetId}] deleted from Firestore.`,
       });
     } catch (err) {
-      console.error('Error deleting hardware asset from Firestore:', err);
+      console.error('Error deleting hardware asset in Firestore:', err);
+    }
+  };
+
+  const updateHardwareAsset = async (assetId: string, updates: Partial<HardwareAsset>) => {
+    setHardwareAssets((prev) =>
+      prev.map((a) => (a.id === assetId || a.assetTag === assetId ? { ...a, ...updates, updatedAt: new Date().toISOString() } : a))
+    );
+    if (activeScannedAsset?.id === assetId || activeScannedAsset?.assetTag === assetId) {
+      setActiveScannedAsset((prev) => (prev ? { ...prev, ...updates, updatedAt: new Date().toISOString() } : null));
+    }
+    try {
+      await updateHardwareAssetInFirestore(assetId, updates);
+    } catch (err) {
+      console.error('Error updating hardware asset in Firestore:', err);
+    }
+  };
+
+  const importHardwareAssets = async (incomingAssets: HardwareAsset[]): Promise<{ count: number }> => {
+    // 1. Optimistically update local state
+    setHardwareAssets((prev) => {
+      const map = new Map(prev.map((a) => [a.id || a.assetTag, a]));
+      incomingAssets.forEach((item) => {
+        const id = item.id || item.assetTag;
+        map.set(id, item);
+      });
+      return Array.from(map.values());
+    });
+
+    // 2. Commit batch write to Firestore so all devices get real-time update
+    try {
+      const res = await batchImportHardwareAssets(incomingAssets);
+      addToast({
+        type: 'success',
+        title: 'Assets Imported & Synced',
+        message: `Successfully synchronized ${res.count} hardware assets across all lab devices.`,
+      });
+      return { count: res.count };
+    } catch (err) {
+      console.error('Error batch importing assets:', err);
+      addToast({
+        type: 'error',
+        title: 'Import Sync Failed',
+        message: 'Could not sync all assets to Firestore. Check connection.',
+      });
+      return { count: incomingAssets.length };
     }
   };
 
@@ -1851,6 +1916,8 @@ Previous Repairs: ${activeScannedAsset.repairHistory.map((r) => `[${r.date}] ${r
         setIsPhotoAutofillModalOpen,
         lookupHardwareAsset,
         saveHardwareAsset,
+        updateHardwareAsset,
+        importHardwareAssets,
         addAssetRepairLog,
         deleteHardwareAsset,
 

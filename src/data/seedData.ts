@@ -33,8 +33,8 @@ export const INITIAL_USERS: User[] = [
     createdAt: '2026-09-01T08:00:00.000Z',
     benchStation: 'Instructor Master Bench #1',
     clockedIn: true,
-    currentTask: 'Lab Supervision & Master Diagnostics',
-    assignedJobs: ['foreman'],
+    currentTask: 'Quality Assurance & Master Diagnostics',
+    assignedJobs: ['quality_assurance', 'foreman'],
   },
   {
     id: 'user_worker_xaiver',
@@ -99,8 +99,8 @@ export const INITIAL_USERS: User[] = [
     createdAt: '2026-09-10T09:00:00.000Z',
     benchStation: 'Bench 02',
     clockedIn: false,
-    currentTask: 'Hardware Triage & Power Supply Testing',
-    assignedJobs: ['jobless'],
+    currentTask: 'Hardware Quality Assurance & Final Inspection',
+    assignedJobs: ['quality_assurance'],
   },
   {
     id: 'user_worker_tristan',

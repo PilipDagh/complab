@@ -9,6 +9,8 @@ import {
   getDocFromServer,
   query,
   orderBy,
+  onSnapshot,
+  writeBatch,
 } from 'firebase/firestore';
 import { db, auth } from './firebase.ts';
 import {
@@ -303,38 +305,61 @@ export async function deleteProjectFromFirestore(projectId: string): Promise<voi
 
 // --- HARDWARE ASSETS & REPAIR HISTORY FIRESTORE CRUD ---
 
+export function mapDocToHardwareAsset(d: any): HardwareAsset {
+  const data = d.data ? d.data() : d;
+  return {
+    id: d.id || data.id || data.assetTag,
+    assetTag: data.assetTag || d.id,
+    serialNumber: data.serialNumber || 'UNKNOWN-SN',
+    model: data.model || 'Generic Hardware Unit',
+    deviceType: data.deviceType || 'Desktop Tower',
+    assignedBench: data.assignedBench || 'Bench #1',
+    department: data.department || 'Vocational IT Lab',
+    status: data.status || 'In Service',
+    kanbanStage: data.kanbanStage || 'deployed',
+    isCurrentlyOnHand: data.isCurrentlyOnHand !== undefined ? data.isCurrentlyOnHand : true,
+    problemLabel: data.problemLabel || undefined,
+    specs: data.specs || {},
+    qaReview: data.qaReview || undefined,
+    purchaseDate: data.purchaseDate || undefined,
+    warrantyExpiry: data.warrantyExpiry || undefined,
+    notes: data.notes || '',
+    repairHistory: Array.isArray(data.repairHistory) ? data.repairHistory : [],
+    createdAt: data.createdAt || new Date().toISOString(),
+    updatedAt: data.updatedAt || new Date().toISOString(),
+    authorUid: data.authorUid || undefined,
+  };
+}
+
 export async function fetchHardwareAssetsFromFirestore(): Promise<HardwareAsset[]> {
   const path = 'hardware_assets';
   try {
     const snap = await getDocs(collection(db, path));
     if (snap.empty) return [];
-    return snap.docs.map((d) => {
-      const data = d.data();
-      return {
-        id: d.id,
-        assetTag: data.assetTag || d.id,
-        serialNumber: data.serialNumber || 'UNKNOWN-SN',
-        model: data.model || 'Generic Hardware Unit',
-        deviceType: data.deviceType || 'Desktop Tower',
-        assignedBench: data.assignedBench || 'Bench #1',
-        department: data.department || 'Vocational IT Lab',
-        status: data.status || 'In Service',
-        isCurrentlyOnHand: data.isCurrentlyOnHand !== undefined ? data.isCurrentlyOnHand : true,
-        problemLabel: data.problemLabel || undefined,
-        specs: data.specs || {},
-        purchaseDate: data.purchaseDate || undefined,
-        warrantyExpiry: data.warrantyExpiry || undefined,
-        notes: data.notes || '',
-        repairHistory: Array.isArray(data.repairHistory) ? data.repairHistory : [],
-        createdAt: data.createdAt || new Date().toISOString(),
-        updatedAt: data.updatedAt || new Date().toISOString(),
-        authorUid: data.authorUid || undefined,
-      };
-    });
+    return snap.docs.map(mapDocToHardwareAsset);
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, path);
     return [];
   }
+}
+
+export function subscribeToHardwareAssets(
+  onUpdate: (assets: HardwareAsset[]) => void,
+  onError?: (error: any) => void
+): () => void {
+  const path = 'hardware_assets';
+  return onSnapshot(
+    collection(db, path),
+    (snapshot) => {
+      const assets = snapshot.docs.map(mapDocToHardwareAsset);
+      onUpdate(assets);
+    },
+    (error) => {
+      console.error('Real-time hardware_assets sync error:', error);
+      if (onError) onError(error);
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
 }
 
 export async function getHardwareAssetFromFirestore(assetIdOrTag: string): Promise<HardwareAsset | null> {
@@ -343,26 +368,7 @@ export async function getHardwareAssetFromFirestore(assetIdOrTag: string): Promi
   try {
     const snap = await getDoc(doc(db, 'hardware_assets', cleanId));
     if (snap.exists()) {
-      const data = snap.data();
-      return {
-        id: snap.id,
-        assetTag: data.assetTag || snap.id,
-        serialNumber: data.serialNumber || 'UNKNOWN-SN',
-        model: data.model || 'Generic Hardware Unit',
-        deviceType: data.deviceType || 'Desktop Tower',
-        assignedBench: data.assignedBench || 'Bench #1',
-        department: data.department || 'Vocational IT Lab',
-        status: data.status || 'In Service',
-        isCurrentlyOnHand: data.isCurrentlyOnHand !== undefined ? data.isCurrentlyOnHand : true,
-        problemLabel: data.problemLabel || undefined,
-        specs: data.specs || {},
-        purchaseDate: data.purchaseDate || undefined,
-        warrantyExpiry: data.warrantyExpiry || undefined,
-        notes: data.notes || '',
-        repairHistory: Array.isArray(data.repairHistory) ? data.repairHistory : [],
-        createdAt: data.createdAt || new Date().toISOString(),
-        updatedAt: data.updatedAt || new Date().toISOString(),
-      };
+      return mapDocToHardwareAsset(snap);
     }
     return null;
   } catch (error) {
@@ -382,6 +388,31 @@ export async function saveHardwareAssetToFirestore(asset: HardwareAsset): Promis
     });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function batchImportHardwareAssets(
+  assets: HardwareAsset[]
+): Promise<{ success: boolean; count: number }> {
+  const path = 'hardware_assets';
+  try {
+    const batch = writeBatch(db);
+    const now = new Date().toISOString();
+    assets.forEach((asset) => {
+      const docId = asset.id || asset.assetTag;
+      const ref = doc(db, 'hardware_assets', docId);
+      batch.set(ref, {
+        ...asset,
+        id: docId,
+        updatedAt: now,
+        authorUid: auth.currentUser?.uid || 'import_tool',
+      }, { merge: true });
+    });
+    await batch.commit();
+    return { success: true, count: assets.length };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+    return { success: false, count: 0 };
   }
 }
 

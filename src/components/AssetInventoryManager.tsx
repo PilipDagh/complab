@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
-import { HardwareAsset, AssetRepairLog, AssetProblemLabel } from '../types';
+import { HardwareAsset, AssetRepairLog, AssetProblemLabel, AssetKanbanStage } from '../types';
 import { generateQrDataUrl } from '../lib/qrCode';
+import { AssetImportModal } from './AssetImportModal';
 import {
   Tag,
   Plus,
@@ -31,12 +32,16 @@ import {
   Clock,
   Sparkles,
   Download,
+  Upload,
   AlertCircle,
   Radio,
   FileText,
   SlidersHorizontal,
   ChevronDown,
   Camera,
+  ArrowRight,
+  ArrowLeft,
+  Award,
 } from 'lucide-react';
 
 const COMMON_PROBLEM_PRESETS = [
@@ -87,6 +92,7 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
   const {
     hardwareAssets,
     saveHardwareAsset,
+    updateHardwareAsset,
     deleteHardwareAsset,
     addAssetRepairLog,
     currentUser,
@@ -104,10 +110,12 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
   const [filterProblem, setFilterProblem] = useState<'ALL' | 'PROBLEMS_ONLY' | 'HEALTHY_ONLY'>('ALL');
   const [filterDeviceType, setFilterDeviceType] = useState<string>('ALL');
   const [filterBench, setFilterBench] = useState<string>('ALL');
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [filterQaStage, setFilterQaStage] = useState<'ALL' | 'PASSED' | 'REWORK' | 'PENDING'>('ALL');
+  const [viewMode, setViewMode] = useState<'cards' | 'table' | 'kanban'>('cards');
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [problemModalAsset, setProblemModalAsset] = useState<HardwareAsset | null>(null);
   const [deleteConfirmAsset, setDeleteConfirmAsset] = useState<HardwareAsset | null>(null);
   const [qrPrintAsset, setQrPrintAsset] = useState<HardwareAsset | null>(null);
@@ -176,7 +184,12 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
         }
       }
 
-      // 5. Query Search
+      // 5. QA Stage Filter
+      if (filterQaStage === 'PASSED' && asset.qaReview?.status !== 'Passed') return false;
+      if (filterQaStage === 'REWORK' && asset.qaReview?.status !== 'Needs Rework') return false;
+      if (filterQaStage === 'PENDING' && (asset.qaReview?.status === 'Passed' || asset.qaReview?.status === 'Needs Rework')) return false;
+
+      // 6. Query Search
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
 
@@ -186,6 +199,7 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
         asset.serialNumber.toLowerCase().includes(q) ||
         asset.assignedBench.toLowerCase().includes(q) ||
         asset.deviceType.toLowerCase().includes(q) ||
+        (asset.qaReview?.inspectedBy && asset.qaReview.inspectedBy.toLowerCase().includes(q)) ||
         (asset.problemLabel?.problemTitle && asset.problemLabel.problemTitle.toLowerCase().includes(q)) ||
         (asset.problemLabel?.problemDescription && asset.problemLabel.problemDescription.toLowerCase().includes(q)) ||
         (asset.specs.cpu && asset.specs.cpu.toLowerCase().includes(q)) ||
@@ -201,6 +215,7 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
     filterProblem,
     filterDeviceType,
     filterBench,
+    filterQaStage,
   ]);
 
   // Metric Aggregations
@@ -478,14 +493,9 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
   const handleOpenQrPrint = async (asset: HardwareAsset) => {
     setQrPrintAsset(asset);
     try {
-      const qrPayload = JSON.stringify({
-        tag: asset.assetTag,
-        model: asset.model,
-        sn: asset.serialNumber,
-        bench: asset.assignedBench,
-        specs: `${asset.specs.cpu || ''} / ${asset.specs.ram || ''}`,
-      });
-      const url = await generateQrDataUrl(qrPayload, 300);
+      // Direct Web URL pointing to the standalone asset spec sheet of THAT asset
+      const publicAssetUrl = `${window.location.origin}/?asset=${encodeURIComponent(asset.assetTag)}`;
+      const url = await generateQrDataUrl(publicAssetUrl, 300);
       setQrDataUrl(url);
     } catch (e) {
       console.error('Failed to generate QR data url:', e);
