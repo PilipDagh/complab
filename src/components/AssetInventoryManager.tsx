@@ -580,12 +580,21 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
             </button>
 
             <button
+              onClick={() => setIsImportModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-mono text-xs font-bold flex items-center gap-1.5 shadow-md shadow-cyan-950/40 transition-all active:scale-95"
+              title="Import hardware assets from .json or .csv"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>Import Assets</span>
+            </button>
+
+            <button
               onClick={handleExportInventory}
               className="px-3 py-2 rounded-xl bg-[#0d1117] hover:bg-[#21262d] border border-[#30363d] text-gray-300 hover:text-white font-mono text-xs flex items-center gap-1.5 transition-colors"
-              title="Export complete asset inventory"
+              title="Export complete asset inventory (.json)"
             >
               <Download className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Export</span>
+              <span className="hidden sm:inline">Export JSON</span>
             </button>
           </div>
         </div>
@@ -1779,6 +1788,12 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
           </div>
         </div>
       )}
+
+      {/* Asset Import Modal (.json / .csv) */}
+      <AssetImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+      />
     </div>
   );
 };

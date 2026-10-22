@@ -72,9 +72,32 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({ isOpen, onCl
         if (Array.isArray(json)) {
           items = json;
         } else if (json && Array.isArray(json.assets)) {
+          // Standard TradeTech export format
           items = json.assets;
         } else if (json && Array.isArray(json.hardwareAssets)) {
           items = json.hardwareAssets;
+        } else if (json && Array.isArray(json.inventory)) {
+          items = json.inventory;
+        } else if (json && Array.isArray(json.data)) {
+          items = json.data;
+        } else if (json && Array.isArray(json.items)) {
+          items = json.items;
+        } else if (json && (json.assetTag || json.serialNumber || json.model)) {
+          // Single asset JSON object
+          items = [json];
+        } else if (json && typeof json === 'object') {
+          // Key-value map of assets
+          const possibleValues = Object.values(json);
+          const assetCandidates = possibleValues.filter(
+            (v: any) => v && typeof v === 'object' && (v.assetTag || v.serialNumber || v.model)
+          );
+          if (assetCandidates.length > 0) {
+            items = assetCandidates;
+          } else {
+            throw new Error(
+              'JSON file must contain an array of hardware assets, a TradeTech export envelope, or asset records.'
+            );
+          }
         } else {
           throw new Error('JSON file must contain an array of hardware assets or a TradeTech export envelope.');
         }
@@ -92,6 +115,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({ isOpen, onCl
             status: item.status || 'In Service',
             kanbanStage: item.kanbanStage || 'intake',
             isCurrentlyOnHand: item.isCurrentlyOnHand !== undefined ? item.isCurrentlyOnHand : true,
+            problemLabel: item.problemLabel || undefined,
             specs: item.specs || {},
             qaReview: item.qaReview || undefined,
             purchaseDate: item.purchaseDate || undefined,
