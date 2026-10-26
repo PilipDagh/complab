@@ -47,6 +47,8 @@ export const WorkstationStatusModal: React.FC<WorkstationStatusModalProps> = ({
     currentUser,
     isOwner,
     isWorker,
+    users,
+    switchUserQuick,
     updateComLabWorkstationStatus,
     simulateTelemetryHeartbeat,
     openAuthModal,
@@ -58,6 +60,19 @@ export const WorkstationStatusModal: React.FC<WorkstationStatusModalProps> = ({
     isWorker ||
     currentUser?.role === 'ROLE_OWNER' ||
     currentUser?.role === 'ROLE_WORKER';
+
+  const handleQuickUnlock = () => {
+    const owner = users.find((u) => u.role === 'ROLE_OWNER' || u.username === 'julian') || users[0];
+    if (owner) {
+      switchUserQuick(owner.id);
+      setIsEditing(true);
+      addToast({
+        type: 'success',
+        title: 'Instructor Mode Unlocked',
+        message: 'Signed in as Julian (Owner). You can now edit and save workstation diagnostics.',
+      });
+    }
+  };
 
   // Form states
   const [isEditing, setIsEditing] = useState(false);
@@ -257,16 +272,22 @@ export const WorkstationStatusModal: React.FC<WorkstationStatusModalProps> = ({
             {/* Status LED Icon */}
             <div className="relative">
               {statusLevel === 'red' && (
-                <div className="relative flex items-center justify-center">
-                  <span className="animate-ping absolute inline-flex h-4 w-4 rounded-full bg-red-400 opacity-75"></span>
-                  <div className="w-3.5 h-3.5 rounded-full bg-red-500 shadow-[0_0_12px_#ef4444]"></div>
-                </div>
+                <div className="w-3.5 h-3.5 rounded-full bg-red-600 shadow-[0_0_14px_#dc2626] animate-solid-red"></div>
+              )}
+              {statusLevel === 'blinking_red' && (
+                <div className="w-3.5 h-3.5 rounded-full bg-red-500 shadow-[0_0_12px_#ef4444] animate-blink-red"></div>
+              )}
+              {statusLevel === 'blinking_orange' && (
+                <div className="w-3.5 h-3.5 rounded-full bg-amber-400 shadow-[0_0_12px_#f59e0b] animate-blink-orange"></div>
               )}
               {statusLevel === 'orange' && (
-                <div className="w-3.5 h-3.5 rounded-full bg-amber-500 shadow-[0_0_10px_#f59e0b] animate-pulse"></div>
+                <div className="w-3.5 h-3.5 rounded-full bg-amber-500 shadow-[0_0_10px_#f59e0b] animate-glow-orange"></div>
+              )}
+              {statusLevel === 'blinking_green' && (
+                <div className="w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-[0_0_12px_#10b981] animate-blink-green"></div>
               )}
               {statusLevel === 'green' && (
-                <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]"></div>
+                <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981] animate-solid-green"></div>
               )}
               {statusLevel === 'unconfigured' && (
                 <div className="w-3.5 h-3.5 rounded-full bg-slate-500 border border-slate-400"></div>
@@ -317,20 +338,29 @@ export const WorkstationStatusModal: React.FC<WorkstationStatusModalProps> = ({
         <div className="p-5 space-y-5 overflow-y-auto flex-1 text-sm custom-scrollbar bg-[#0f172a]/40">
           {/* Elevation Banner if Guest / Student */}
           {!canEdit && (
-            <div className="p-3.5 rounded-xl bg-purple-950/40 border border-purple-500/40 flex items-center justify-between text-xs">
+            <div className="p-3.5 rounded-xl bg-purple-950/40 border border-purple-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2 text-purple-200">
                 <Shield className="w-4 h-4 text-purple-400 shrink-0" />
                 <span>
-                  Viewing in <strong>Guest / Student Mode</strong> (Read-Only). Switch to Julian
-                  (Owner) to edit hardware components and status levels.
+                  Viewing in <strong>Guest / Student Mode</strong> (Read-Only). Switch to Instructor
+                  (Julian) to edit hardware components and status levels.
                 </span>
               </div>
-              <button
-                onClick={() => openAuthModal('profiles_menu')}
-                className="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white font-mono font-bold text-[11px] shrink-0 ml-3"
-              >
-                Switch Profile
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={handleQuickUnlock}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-xs shadow-md transition-all active:scale-95 flex items-center gap-1.5"
+                >
+                  <Wrench className="w-3.5 h-3.5" />
+                  <span>Unlock & Edit</span>
+                </button>
+                <button
+                  onClick={() => openAuthModal('profiles_menu')}
+                  className="px-2.5 py-1.5 rounded-lg bg-[#1e293b] hover:bg-[#334155] text-purple-300 font-mono text-xs border border-purple-500/40 transition-colors"
+                >
+                  Profiles
+                </button>
+              </div>
             </div>
           )}
 
@@ -362,36 +392,50 @@ export const WorkstationStatusModal: React.FC<WorkstationStatusModalProps> = ({
           {/* ======================================================== */}
           {!isEditing ? (
             <div className="space-y-4">
-              {/* Alert Status Card */}
+              {/* Alert Status Card strictly mapped to the 6-state matrix */}
               <div
-                className={`p-4 rounded-xl border flex items-center justify-between ${
+                className={`p-4 rounded-xl border flex items-center justify-between transition-colors ${
                   workstation.statusLevel === 'red'
+                    ? 'bg-red-950/40 border-red-500/70 text-red-200 shadow-[0_0_20px_rgba(220,38,38,0.25)]'
+                    : workstation.statusLevel === 'blinking_red'
                     ? 'bg-red-950/30 border-red-500/50 text-red-200'
-                    : workstation.statusLevel === 'orange'
+                    : workstation.statusLevel === 'blinking_orange' || workstation.statusLevel === 'orange'
                     ? 'bg-amber-950/30 border-amber-500/50 text-amber-200'
+                    : workstation.statusLevel === 'blinking_green'
+                    ? 'bg-emerald-950/25 border-emerald-500/40 text-emerald-200'
                     : workstation.statusLevel === 'green'
-                    ? 'bg-emerald-950/30 border-emerald-500/50 text-emerald-200'
+                    ? 'bg-emerald-950/35 border-emerald-500/60 text-emerald-200 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
                     : 'bg-gray-900/60 border-gray-700 text-gray-300'
                 }`}
               >
                 <div className="flex items-center gap-3">
                   {workstation.statusLevel === 'red' && (
-                    <div className="p-2 rounded-lg bg-red-900/60 text-red-400 animate-pulse">
-                      <AlertTriangle className="w-5 h-5" />
+                    <div className="p-2.5 rounded-lg bg-red-900/70 text-red-300 animate-pulse">
+                      <AlertTriangle className="w-5 h-5 text-red-400" />
                     </div>
                   )}
-                  {workstation.statusLevel === 'orange' && (
-                    <div className="p-2 rounded-lg bg-amber-900/60 text-amber-400">
+                  {workstation.statusLevel === 'blinking_red' && (
+                    <div className="p-2.5 rounded-lg bg-red-950/80 text-red-400 border border-red-500/50">
+                      <AlertTriangle className="w-5 h-5 animate-bounce" />
+                    </div>
+                  )}
+                  {(workstation.statusLevel === 'blinking_orange' || workstation.statusLevel === 'orange') && (
+                    <div className="p-2.5 rounded-lg bg-amber-900/60 text-amber-400">
                       <AlertCircle className="w-5 h-5" />
                     </div>
                   )}
+                  {workstation.statusLevel === 'blinking_green' && (
+                    <div className="p-2.5 rounded-lg bg-emerald-950 text-emerald-400 border border-emerald-500/50">
+                      <Activity className="w-5 h-5 animate-pulse" />
+                    </div>
+                  )}
                   {workstation.statusLevel === 'green' && (
-                    <div className="p-2 rounded-lg bg-emerald-900/60 text-emerald-400">
+                    <div className="p-2.5 rounded-lg bg-emerald-900/60 text-emerald-400">
                       <CheckCircle className="w-5 h-5" />
                     </div>
                   )}
                   {workstation.statusLevel === 'unconfigured' && (
-                    <div className="p-2 rounded-lg bg-gray-800 text-gray-400">
+                    <div className="p-2.5 rounded-lg bg-gray-800 text-gray-400">
                       <HelpCircle className="w-5 h-5" />
                     </div>
                   )}
@@ -400,19 +444,41 @@ export const WorkstationStatusModal: React.FC<WorkstationStatusModalProps> = ({
                       Indicator LED State
                     </span>
                     <h4 className="font-bold text-base">
-                      {workstation.statusLevel === 'red' &&
-                        'BLINKING RED — Immediate Attention / Critical'}
-                      {workstation.statusLevel === 'orange' &&
-                        'ORANGE — Issue Present / Non-Emergency (Can Wait)'}
                       {workstation.statusLevel === 'green' &&
-                        'GREEN — Operational / Good (No Issues)'}
+                        'SOLID GREEN — Operational & Live Transmitting (< 1s)'}
+                      {workstation.statusLevel === 'blinking_green' &&
+                        'BLINKING GREEN — Offline / Signal Dropped (Was Working)'}
+                      {workstation.statusLevel === 'blinking_orange' &&
+                        'BLINKING ORANGE — Bootable With Errors / Warnings'}
+                      {workstation.statusLevel === 'orange' &&
+                        'SOLID ORANGE — Attention / Maintenance Needed'}
+                      {workstation.statusLevel === 'blinking_red' &&
+                        'BLINKING RED — Bad Recoverable Hardware/OS Error'}
+                      {workstation.statusLevel === 'red' &&
+                        'SOLID RED — Critical Fatal Failure ("PC IS FUCKED!")'}
                       {workstation.statusLevel === 'unconfigured' &&
-                        'UNCONFIGURED — Blank / Awaiting Inspection'}
+                        'SOLID GRAY — Never Connected / Zero Signal'}
                     </h4>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {workstation.statusLevel === 'green' &&
+                        'PC is working just fine, powered on, and actively transmitting live telemetry every 900ms.'}
+                      {workstation.statusLevel === 'blinking_green' &&
+                        'Machine worked fine when last connected, but is now turned off or stopped transmitting data.'}
+                      {workstation.statusLevel === 'blinking_orange' &&
+                        'System encountered issues (e.g. thermal throttling, fan stall), but remains bootable and usable.'}
+                      {workstation.statusLevel === 'orange' &&
+                        'System requires inspection or pending maintenance, but poses no immediate danger.'}
+                      {workstation.statusLevel === 'blinking_red' &&
+                        'Bad error occurred (e.g. SMART drive degradation, RAM ECC errors), but is recoverable.'}
+                      {workstation.statusLevel === 'red' &&
+                        'Fatal system failure. Unrecoverable hardware damage or fatal crash. "PC is FUCKED!"'}
+                      {workstation.statusLevel === 'unconfigured' &&
+                        'No agent heartbeat or physical signal has ever been registered for this workstation.'}
+                    </p>
                   </div>
                 </div>
 
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   <span className="text-[11px] font-mono text-gray-400 block">AC Power State</span>
                   <span
                     className={`text-xs font-mono font-semibold px-2 py-0.5 rounded border inline-block ${
@@ -429,6 +495,62 @@ export const WorkstationStatusModal: React.FC<WorkstationStatusModalProps> = ({
                   </span>
                 </div>
               </div>
+
+              {/* Automated Error & Diagnostic Detection Card (When Issues Occur) */}
+              {(workstation.telemetry?.errorCode ||
+                workstation.telemetry?.errorName ||
+                workstation.issueDescription) && (
+                <div
+                  className={`p-4 rounded-xl border space-y-2.5 ${
+                    workstation.statusLevel === 'red'
+                      ? 'bg-red-950/50 border-red-500 text-red-200'
+                      : workstation.statusLevel === 'blinking_red'
+                      ? 'bg-red-950/40 border-red-500/70 text-red-200'
+                      : 'bg-amber-950/40 border-amber-500/60 text-amber-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between flex-wrap gap-2 border-b border-white/10 pb-2">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-red-400" />
+                      <span className="font-mono font-bold text-xs uppercase tracking-wider">
+                        Hardware &amp; OS Debug Diagnostic Detected
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {workstation.telemetry?.errorCode && (
+                        <span className="text-xs font-mono px-2 py-0.5 rounded bg-black/60 border border-red-500/60 font-bold text-red-300">
+                          CODE: {workstation.telemetry.errorCode}
+                        </span>
+                      )}
+                      <span
+                        className={`text-[10px] font-mono px-2 py-0.5 rounded uppercase font-bold ${
+                          workstation.statusLevel === 'red'
+                            ? 'bg-red-600 text-white'
+                            : workstation.statusLevel === 'blinking_red'
+                            ? 'bg-red-900 text-red-200'
+                            : 'bg-amber-800 text-amber-100'
+                        }`}
+                      >
+                        {workstation.statusLevel === 'red'
+                          ? 'Bootable: NO (PC IS FUCKED)'
+                          : 'Bootable: YES (USABLE)'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h5 className="font-bold text-sm text-white">
+                      {workstation.telemetry?.errorName || 'Detected Hardware Alert'}
+                    </h5>
+                    <p className="text-xs opacity-90 mt-1 leading-relaxed">
+                      {workstation.telemetry?.errorDescription ||
+                        workstation.issueDescription ||
+                        'Telemetry agent detected diagnostic flags.'}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Special Flags for C4 or C3 */}
               {workstation.id === 'pc_C_4' && (
@@ -583,6 +705,283 @@ export const WorkstationStatusModal: React.FC<WorkstationStatusModalProps> = ({
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* ======================================================== */}
+              {/* COMPREHENSIVE LIVE TELEMETRY DECK (EVERY STAT & SPEC)     */}
+              {/* ======================================================== */}
+              <div className="bg-[#070b12] border border-cyan-800/50 rounded-xl p-4 space-y-4">
+                <div className="flex items-center justify-between border-b border-gray-800 pb-2.5 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-cyan-400 animate-pulse" />
+                    <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-cyan-300">
+                      Live Telemetry &amp; Hardware Sensor Deck (&lt; 1s Sync)
+                    </h4>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs font-mono">
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1.5 ${
+                        workstation.telemetry?.agentOnline
+                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/70'
+                          : 'bg-gray-800 text-gray-400 border-gray-700'
+                      }`}
+                    >
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          workstation.telemetry?.agentOnline
+                            ? 'bg-emerald-400 animate-ping'
+                            : 'bg-gray-500'
+                        }`}
+                      ></span>
+                      <span>
+                        {workstation.telemetry?.agentOnline ? 'AGENT ONLINE' : 'AGENT STANDBY'}
+                      </span>
+                    </span>
+
+                    {workstation.telemetry?.lastPing && (
+                      <span className="text-[11px] text-gray-400">
+                        Last Ping: {new Date(workstation.telemetry.lastPing).toLocaleTimeString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 1. CPU Telemetry Card */}
+                <div className="p-3 rounded-lg bg-[#0d131f] border border-gray-800 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <span className="font-bold text-gray-200 flex items-center gap-1.5">
+                      <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>CPU Metrics</span>
+                    </span>
+                    <span className="text-[11px] text-gray-400 truncate max-w-[260px]">
+                      {workstation.telemetry?.cpuModel || workstation.components?.cpu || 'Multi-Core Processor'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                    <div className="bg-[#111827] p-2 rounded border border-gray-800">
+                      <span className="text-[10px] text-gray-500 block">CLOCK SPEED</span>
+                      <span className="text-white font-bold">
+                        {workstation.telemetry?.cpuClockMhz || 3800} MHz
+                      </span>
+                    </div>
+
+                    <div className="bg-[#111827] p-2 rounded border border-gray-800">
+                      <span className="text-[10px] text-gray-500 block">CORES / THREADS</span>
+                      <span className="text-white font-bold">
+                        {workstation.telemetry?.cpuCores || 8}C / {workstation.telemetry?.cpuThreads || 16}T
+                      </span>
+                    </div>
+
+                    <div className="bg-[#111827] p-2 rounded border border-gray-800">
+                      <span className="text-[10px] text-gray-500 block">CPU LOAD</span>
+                      <span
+                        className={`font-bold ${
+                          (workstation.telemetry?.cpuUsagePercent ?? 0) > 80
+                            ? 'text-red-400'
+                            : 'text-emerald-400'
+                        }`}
+                      >
+                        {workstation.telemetry?.cpuUsagePercent ?? 18}%
+                      </span>
+                    </div>
+
+                    <div className="bg-[#111827] p-2 rounded border border-gray-800">
+                      <span className="text-[10px] text-gray-500 block">PACKAGE TEMP</span>
+                      <span
+                        className={`font-bold ${
+                          (workstation.telemetry?.cpuTempCelsius ?? 40) > 80
+                            ? 'text-red-400'
+                            : (workstation.telemetry?.cpuTempCelsius ?? 40) > 65
+                            ? 'text-amber-400'
+                            : 'text-emerald-400'
+                        }`}
+                      >
+                        {workstation.telemetry?.cpuTempCelsius ?? 42}°C
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Per Core Temperatures & Throttling Flag */}
+                  <div className="flex items-center justify-between text-[11px] font-mono pt-1 text-gray-400 border-t border-gray-800/60">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">Core Temps:</span>
+                      {(workstation.telemetry?.coreTempsCelsius || [40, 42, 41, 39]).map((t, idx) => (
+                        <span key={idx} className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-300">
+                          C{idx}: {t}°C
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">Throttling:</span>
+                      <span
+                        className={`font-bold ${
+                          workstation.telemetry?.isThrottling ? 'text-red-400' : 'text-emerald-400'
+                        }`}
+                      >
+                        {workstation.telemetry?.isThrottling ? '⚠️ YES (OVERHEAT)' : 'NO'}
+                      </span>
+                      <span className="text-gray-500">| {workstation.telemetry?.cpuVoltage || 1.15}V</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. RAM & GPU Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* RAM Metrics */}
+                  <div className="p-3 rounded-lg bg-[#0d131f] border border-gray-800 space-y-2 text-xs font-mono">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-gray-200 flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>RAM (DDR4 / DDR5)</span>
+                      </span>
+                      <span className="text-cyan-300 font-bold">
+                        {workstation.telemetry?.ramUsagePercent ?? 34}% Used
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[11px] text-gray-400">
+                        <span>Used: {Math.round((workstation.telemetry?.ramUsedMb || 5500) / 1024 * 10) / 10} GB</span>
+                        <span>Total: {Math.round((workstation.telemetry?.ramTotalMb || 16384) / 1024)} GB</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-gray-800 overflow-hidden">
+                        <div
+                          className="h-full bg-cyan-500 rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min(100, workstation.telemetry?.ramUsagePercent ?? 34)}%` }}
+                        ></div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between text-[11px] text-gray-400 pt-1 border-t border-gray-800/60">
+                      <span>Speed: {workstation.telemetry?.ramSpeedMhz || 3200} MHz</span>
+                      <span>Slots: {workstation.telemetry?.ramSlotsUsed || '2 / 4 DIMMs'}</span>
+                    </div>
+                  </div>
+
+                  {/* GPU Metrics */}
+                  <div className="p-3 rounded-lg bg-[#0d131f] border border-gray-800 space-y-2 text-xs font-mono">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-gray-200 flex items-center gap-1.5">
+                        <Monitor className="w-3.5 h-3.5 text-purple-400" />
+                        <span>GPU Accelerator</span>
+                      </span>
+                      <span className="text-purple-300 font-bold truncate max-w-[140px]">
+                        {workstation.telemetry?.gpuModel || workstation.components?.gpu || 'GPU Unit'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1.5 text-center text-[11px]">
+                      <div className="bg-[#111827] p-1.5 rounded">
+                        <span className="text-gray-500 block text-[9px]">TEMP</span>
+                        <span className="text-white font-bold">{workstation.telemetry?.gpuTempCelsius || 44}°C</span>
+                      </div>
+                      <div className="bg-[#111827] p-1.5 rounded">
+                        <span className="text-gray-500 block text-[9px]">LOAD</span>
+                        <span className="text-white font-bold">{workstation.telemetry?.gpuUsagePercent || 14}%</span>
+                      </div>
+                      <div className="bg-[#111827] p-1.5 rounded">
+                        <span className="text-gray-500 block text-[9px]">VRAM</span>
+                        <span className="text-white font-bold">{Math.round((workstation.telemetry?.gpuVramUsedMb || 1200) / 1024 * 10) / 10}GB</span>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between text-[11px] text-gray-400 pt-1 border-t border-gray-800/60">
+                      <span>Total VRAM: {Math.round((workstation.telemetry?.gpuVramTotalMb || 8192) / 1024)} GB</span>
+                      <span>Fan RPM: {workstation.telemetry?.gpuFanPercent || 40}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Storage & SMART Disks Table */}
+                <div className="p-3 rounded-lg bg-[#0d131f] border border-gray-800 space-y-2 text-xs font-mono">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-gray-200 flex items-center gap-1.5">
+                      <HardDrive className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Physical Storage &amp; SMART Health</span>
+                    </span>
+                    <span className="text-[11px] text-emerald-400">
+                      Overall: {workstation.telemetry?.diskHealth || 'Healthy'}
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[11px] text-left">
+                      <thead>
+                        <tr className="text-gray-500 border-b border-gray-800">
+                          <th className="pb-1">Drive / Volume</th>
+                          <th className="pb-1">Model</th>
+                          <th className="pb-1">Capacity</th>
+                          <th className="pb-1">Free Space</th>
+                          <th className="pb-1">SMART</th>
+                          <th className="pb-1 text-right">R/W Rate</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-800/60 text-gray-300">
+                        {(workstation.telemetry?.disks || [
+                          {
+                            name: 'C: Primary NVMe',
+                            model: 'PCIe Gen4 SSD',
+                            sizeGb: 1000,
+                            freeGb: 642,
+                            tempCelsius: 36,
+                            readSpeedMb: 14.2,
+                            writeSpeedMb: 8.4,
+                            smartHealth: 'Healthy' as const,
+                          },
+                        ]).map((d, i) => (
+                          <tr key={i} className="hover:bg-gray-800/40">
+                            <td className="py-1.5 text-white font-bold">{d.name}</td>
+                            <td className="py-1.5 text-gray-400 truncate max-w-[120px]">{d.model || 'SSD Drive'}</td>
+                            <td className="py-1.5">{d.sizeGb} GB</td>
+                            <td className="py-1.5">{d.freeGb} GB</td>
+                            <td className="py-1.5">
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                  d.smartHealth === 'Critical'
+                                    ? 'bg-red-950 text-red-300 border border-red-500/60'
+                                    : d.smartHealth === 'Warning'
+                                    ? 'bg-amber-950 text-amber-300 border border-amber-500/60'
+                                    : 'bg-emerald-950 text-emerald-300 border border-emerald-500/60'
+                                }`}
+                              >
+                                {d.smartHealth}
+                              </span>
+                            </td>
+                            <td className="py-1.5 text-right font-mono text-gray-400">
+                              {d.readSpeedMb || 0} / {d.writeSpeedMb || 0} MB/s
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* 4. Network, Motherboard & OS Info */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono text-gray-400">
+                  <div className="p-2.5 rounded-lg bg-[#0d131f] border border-gray-800 space-y-1">
+                    <span className="font-bold text-gray-200 block">Network Adapter:</span>
+                    <div className="grid grid-cols-2 gap-x-2 text-[11px]">
+                      <div>IP: <span className="text-white">{workstation.telemetry?.ipAddress || '192.168.10.101'}</span></div>
+                      <div>Speed: <span className="text-white">{workstation.telemetry?.network?.linkSpeedMbps || 1000} Mbps</span></div>
+                      <div>MAC: <span className="text-gray-300 truncate block">{workstation.telemetry?.macAddress || '52:54:00:12:34:01'}</span></div>
+                      <div>Gateway: <span className="text-gray-300">{workstation.telemetry?.network?.gateway || '192.168.10.1'}</span></div>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-[#0d131f] border border-gray-800 space-y-1">
+                    <span className="font-bold text-gray-200 block">System &amp; Motherboard:</span>
+                    <div className="grid grid-cols-2 gap-x-2 text-[11px]">
+                      <div>Board: <span className="text-white truncate block">{workstation.telemetry?.motherboard?.model || workstation.components?.motherboard || 'ATX Board'}</span></div>
+                      <div>BIOS: <span className="text-white">{workstation.telemetry?.motherboard?.biosVersion || 'v2.40'}</span></div>
+                      <div>OS: <span className="text-gray-300 truncate block">{workstation.telemetry?.os || 'Windows 11 Pro / Linux'}</span></div>
+                      <div>Uptime: <span className="text-gray-300">{Math.round((workstation.telemetry?.uptimeSeconds || 3600) / 3600)} hrs</span></div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Technician & Diagnostic Work Notes */}

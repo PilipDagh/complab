@@ -9,6 +9,7 @@ import { ComLabCanvasEngine } from './ComLabCanvasEngine';
 import { WorkstationStatusModal } from './WorkstationStatusModal';
 import { AgentTelemetryDocsModal } from './AgentTelemetryDocsModal';
 import { TelemetryLiveSimulator } from './TelemetryLiveSimulator';
+import { ConnectAgentModal } from './ConnectAgentModal';
 
 export const ComLabStatusSuite: React.FC = () => {
   const {
@@ -27,11 +28,45 @@ export const ComLabStatusSuite: React.FC = () => {
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
 
   // Secondary tools modals (accessible via sleek HUD icons)
+  const [isConnectAgentOpen, setIsConnectAgentOpen] = useState(false);
   const [isTelemetrySimulatorOpen, setIsTelemetrySimulatorOpen] = useState(false);
   const [isTelemetryDocsOpen, setIsTelemetryDocsOpen] = useState(false);
 
   // Cinematic fade-to-black entry/exit transition state (600ms)
   const [transitionState, setTransitionState] = useState<'entering' | 'idle' | 'exiting'>('entering');
+
+  // Real-Time Zero-Latency Server-Sent Events (SSE) telemetry stream
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource('/api/comlab/stream');
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'init' && Array.isArray(data.workstations)) {
+            data.workstations.forEach((ws: ComLabWorkstation) => {
+              updateComLabWorkstationStatus(ws.id, ws);
+            });
+          } else if (data.type === 'telemetry_update' && data.workstation) {
+            updateComLabWorkstationStatus(data.pcId, data.workstation);
+          }
+        } catch {
+          // ignore keepalive comments
+        }
+      };
+
+      eventSource.onerror = () => {
+        // Browser automatically retries SSE connection
+      };
+    } catch (e) {
+      console.warn('SSE stream notice:', e);
+    }
+
+    return () => {
+      eventSource?.close();
+    };
+  }, [updateComLabWorkstationStatus]);
 
   useEffect(() => {
     // Attempt fullscreen on entry safely
@@ -200,6 +235,7 @@ export const ComLabStatusSuite: React.FC = () => {
         onExitLabView={handleExitLabView}
         onOpenTelemetrySimulator={() => setIsTelemetrySimulatorOpen(true)}
         onOpenApiDocs={() => setIsTelemetryDocsOpen(true)}
+        onOpenConnectAgent={() => setIsConnectAgentOpen(true)}
         isOwner={isOwner}
         onToggleAdminMode={handleToggleAdminMode}
       />
@@ -212,6 +248,14 @@ export const ComLabStatusSuite: React.FC = () => {
           setIsStatusModalOpen(false);
           setSelectedWorkstation(null);
         }}
+      />
+
+      {/* Connect Physical PC / Agent Setup Modal */}
+      <ConnectAgentModal
+        isOpen={isConnectAgentOpen}
+        onClose={() => setIsConnectAgentOpen(false)}
+        workstations={comLabWorkstations}
+        onSelectWorkstation={handleSelectWorkstation}
       />
 
       {/* Live Telemetry Heartbeat Dispatcher Simulator */}

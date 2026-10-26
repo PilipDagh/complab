@@ -47,73 +47,84 @@ export const AgentTelemetryDocsModal: React.FC<AgentTelemetryDocsModalProps> = (
     setTimeout(() => setIsPinging(false), 600);
   };
 
-  const pythonScript = `# tradetech_agent.py - Lightweight Lab Background Telemetry Service
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+  const cleanPc = selectedPcId.replace('pc_', '').replace('_', '').toUpperCase();
+
+  const pythonScript = `# tradetech_agent.py - Real-Time Lab Telemetry Daemon (< 1s interval)
 import psutil
 import socket
 import time
 import requests
 
-WORKSTATION_ID = "${selectedPcId}" # Auto-configured for this workstation
-API_ENDPOINT = "https://ais-dev-ngapisxtitorxj2feje4er-294106819957.us-east1.run.app/api/comlab/telemetry"
+WORKSTATION_ID = "${selectedPcId}" # Target Workstation: ${cleanPc}
+API_ENDPOINT = "${origin}/api/comlab/telemetry"
 
 def collect_telemetry():
-    cpu_usage = psutil.cpu_percent(interval=1)
+    cpu_usage = psutil.cpu_percent(interval=None)
     ram = psutil.virtual_memory()
-    temp = 42 # Default fallback
+    temp = 42
     try:
         temps = psutil.sensors_temperatures()
-        if "coretemp" in temps:
+        if "coretemp" in temps and len(temps["coretemp"]) > 0:
             temp = temps["coretemp"][0].current
     except Exception:
         pass
 
     return {
-        "workstationId": WORKSTATION_ID,
+        "pcId": WORKSTATION_ID,
         "hostname": socket.gethostname(),
         "ipAddress": socket.gethostbyname(socket.gethostname()),
+        "os": "Linux / Ubuntu 64-bit",
         "cpuTempCelsius": int(temp),
+        "cpuUsagePercent": int(cpu_usage),
         "ramUsagePercent": int(ram.percent),
         "powerState": "powered_on",
         "agentOnline": True,
-        "statusLevel": "green" if temp < 75 else "orange"
+        "statusLevel": "green" if temp < 80 else "blinking_orange"
     }
 
-def start_heartbeat(interval_sec=30):
-    print(f"[*] TradeTech Telemetry Agent running for {WORKSTATION_ID}...")
+def start_heartbeat(interval_sec=0.9):
+    print(f"[*] TradeTech ComLab Agent active for PC {WORKSTATION_ID}...")
     while True:
         try:
             payload = collect_telemetry()
-            res = requests.post(API_ENDPOINT, json=payload, timeout=5)
-            print(f"[+] Heartbeat delivered: Status {res.status_code}")
+            res = requests.post(API_ENDPOINT, json=payload, timeout=2)
+            print(f"[+] Heartbeat delivered (Status {res.status_code})")
         except Exception as e:
-            print(f"[-] Ping deferred: {e}")
+            print(f"[-] Telemetry defer: {e}")
         time.sleep(interval_sec)
 
 if __name__ == "__main__":
     start_heartbeat()
 `;
 
-  const powerShellScript = `# tradetech_agent.ps1 - Windows Scheduled Task Telemetry Ping
+  const powerShellScript = `# tradetech_agent.ps1 - Windows Real-Time Telemetry Loop (< 1s interval)
 $WorkstationId = "${selectedPcId}"
-$ApiEndpoint = "https://ais-dev-ngapisxtitorxj2feje4er-294106819957.us-east1.run.app/api/comlab/telemetry"
+$ApiEndpoint = "${origin}/api/comlab/telemetry"
 
-$CpuLoad = (Get-WmiObject win32_processor).LoadPercentage
-$Ram = Get-WmiObject win32_OperatingSystem
-$RamUsage = [math]::Round((($Ram.TotalVisibleMemorySize - $Ram.FreePhysicalMemory) / $Ram.TotalVisibleMemorySize) * 100)
+Write-Host "[*] Starting TradeTech Telemetry Agent for $WorkstationId..." -ForegroundColor Cyan
 
-$Payload = @{
-    workstationId = $WorkstationId
-    hostname = $env:COMPUTERNAME
-    ipAddress = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.InterfaceAlias -like "*Ethernet*" -or $_.InterfaceAlias -like "*Wi-Fi*"}).IPAddress[0]
-    cpuTempCelsius = 41
-    ramUsagePercent = $RamUsage
-    powerState = "powered_on"
-    agentOnline = $true
-    statusLevel = if ($RamUsage -gt 90) { "orange" } else { "green" }
-} | ConvertTo-Json
+while ($true) {
+    try {
+        $Cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1)
+        $Os = (Get-CimInstance Win32_OperatingSystem)
+        $RamUsage = [math]::Round((($Os.TotalVisibleMemorySize - $Os.FreePhysicalMemory) / $Os.TotalVisibleMemorySize) * 100)
 
-Invoke-RestMethod -Uri $ApiEndpoint -Method Post -Body $Payload -ContentType "application/json"
-Write-Host "[+] Workstation telemetry successfully dispatched."
+        $Payload = @{
+            pcId = $WorkstationId
+            hostname = $env:COMPUTERNAME
+            cpuTempCelsius = 42
+            cpuUsagePercent = [int]$Cpu.LoadPercentage
+            ramUsagePercent = $RamUsage
+            statusLevel = if ($Cpu.LoadPercentage -gt 85) { "blinking_orange" } else { "green" }
+        } | ConvertTo-Json
+
+        Invoke-RestMethod -Uri $ApiEndpoint -Method Post -Body $Payload -ContentType "application/json" -TimeoutSec 2 | Out-Null
+    } catch {
+        Write-Warning "Telemetry ping deferred: $($_.Exception.Message)"
+    }
+    Start-Sleep -Milliseconds 900
+}
 `;
 
   return (

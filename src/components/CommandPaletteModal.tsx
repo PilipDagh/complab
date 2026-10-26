@@ -22,6 +22,8 @@ import {
   Users,
   Clock,
   Monitor,
+  Wrench,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface ToolSearchItem {
@@ -443,6 +445,33 @@ const SEARCHABLE_TOOLS: ToolSearchItem[] = [
     tab: 'comlab',
     keywords: ['comlab', 'status', 'aerial', 'top down', 'rows', 'row a', 'row b', 'row c', 'row d', 'computer', 'led', 'blinking red', 'orange', 'green', 'zero parts', 'c4', 'c3', 'owner layout'],
     icon: <Monitor className="w-4 h-4 text-cyan-400" />,
+  },
+  {
+    id: 'tools_inventory',
+    title: 'Lab Tools, Supplies & Equipment Inventory',
+    subtitle: 'Track soldering stations, multimeters, consumable flux/solder, and 1-click technician tool clock-outs',
+    category: 'Workstation & Floor',
+    tab: 'tools',
+    keywords: ['tools', 'supplies', 'equipment', 'clock out', 'return', 'solder', 'multimeter', 'ifixit', 'hakko', 'fluke', 'consumables', 'flux', 'drill'],
+    icon: <Wrench className="w-4 h-4 text-amber-400" />,
+  },
+  {
+    id: 'custom_locations',
+    title: 'Custom Physical Lab Location Manager',
+    subtitle: 'Manage storage drawers, mobile crash carts, clean room racks, and solvent lockers (supports blank locations)',
+    category: 'Workstation & Floor',
+    tab: 'tools',
+    keywords: ['location', 'custom location', 'drawers', 'crash cart', 'shelf', 'tool chest', 'cabinet', 'blank location', 'storage zone'],
+    icon: <Wrench className="w-4 h-4 text-purple-400" />,
+  },
+  {
+    id: 'quality_ensurer',
+    title: 'Quality Ensurer & Outbound Release Certification',
+    subtitle: 'Vocational quality testing rubric (electrical safety, burn-in load test, clean OS/drivers, sanitation) with digital stamp & printable cert',
+    category: 'Workstation & Floor',
+    tab: 'quality',
+    keywords: ['quality', 'qa', 'ensurer', 'inspection', 'outbound release', 'certificate', 'burn-in', 'electrical safety', 'pass stamp', 'rework', 'repaired pc', 'laptop testing'],
+    icon: <ShieldCheck className="w-4 h-4 text-emerald-400" />,
   },
 ];
 

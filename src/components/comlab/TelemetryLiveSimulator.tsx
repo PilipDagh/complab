@@ -164,6 +164,21 @@ export const TelemetryLiveSimulator: React.FC<TelemetryLiveSimulatorProps> = ({
       const parsed = JSON.parse(jsonText) as ComLabTelemetryPayload;
       onDispatchPayload(parsed);
 
+      // Also notify server endpoint for SSE broadcast across all browser tabs
+      fetch('/api/comlab/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pcId: parsed.pc_id,
+          statusLevel: parsed.status?.toLowerCase(),
+          alert_message: parsed.alert_message,
+          notes: parsed.notes,
+          hardware_detected: parsed.hardware_detected,
+          power_connected: parsed.power_connected,
+          ethernet_connected: parsed.ethernet_connected,
+        }),
+      }).catch((err) => console.warn('Simulator server ping notice:', err));
+
       setRecentLogs((prev) => [
         {
           id: `log-${Date.now()}`,

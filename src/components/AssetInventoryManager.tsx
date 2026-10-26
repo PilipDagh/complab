@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { HardwareAsset, AssetRepairLog, AssetProblemLabel, AssetKanbanStage } from '../types';
 import { generateQrDataUrl } from '../lib/qrCode';
 import { AssetImportModal } from './AssetImportModal';
+import { DEMO_ASSET_IDS } from '../lib/firestoreService';
 import {
   Tag,
   Plus,
@@ -94,6 +95,8 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
     saveHardwareAsset,
     updateHardwareAsset,
     deleteHardwareAsset,
+    purgeDemoAssets,
+    clearAllHardwareAssets,
     addAssetRepairLog,
     currentUser,
     isOwner,
@@ -120,6 +123,8 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
   const [deleteConfirmAsset, setDeleteConfirmAsset] = useState<HardwareAsset | null>(null);
   const [qrPrintAsset, setQrPrintAsset] = useState<HardwareAsset | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [isClearAllModalOpen, setIsClearAllModalOpen] = useState<boolean>(false);
+  const [isPurgingDemo, setIsPurgingDemo] = useState<boolean>(false);
 
   // Add Asset Form State
   const [newTag, setNewTag] = useState<string>(`AST-PC-${Math.floor(100 + Math.random() * 900)}`);
@@ -220,6 +225,10 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
 
   // Metric Aggregations
   const totalAssets = hardwareAssets.length;
+  const demoAssetsCount = useMemo(() => {
+    const demoSet = new Set(DEMO_ASSET_IDS);
+    return hardwareAssets.filter((a) => demoSet.has(a.id) || demoSet.has(a.assetTag)).length;
+  }, [hardwareAssets]);
   const onHandCount = hardwareAssets.filter((a) => a.isCurrentlyOnHand ?? true).length;
   const problemsCount = hardwareAssets.filter((a) => a.problemLabel?.hasProblem || a.status === 'Under Repair').length;
   const healthyCount = hardwareAssets.filter((a) => (a.isCurrentlyOnHand ?? true) && !a.problemLabel?.hasProblem && a.status === 'In Service').length;
@@ -596,8 +605,72 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
               <Download className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Export JSON</span>
             </button>
+
+            {demoAssetsCount > 0 && (
+              <button
+                onClick={async () => {
+                  setIsPurgingDemo(true);
+                  try {
+                    await purgeDemoAssets();
+                  } finally {
+                    setIsPurgingDemo(false);
+                  }
+                }}
+                disabled={isPurgingDemo}
+                className="px-3.5 py-2 rounded-xl bg-red-950/60 hover:bg-red-900/80 border border-red-500/50 text-red-300 font-mono text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-md"
+                title="Purge default sample assets from database"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                <span>{isPurgingDemo ? 'Purging...' : `Purge Demo (${demoAssetsCount})`}</span>
+              </button>
+            )}
+
+            {totalAssets > 0 && (
+              <button
+                onClick={() => setIsClearAllModalOpen(true)}
+                className="px-3 py-2 rounded-xl bg-[#0d1117] hover:bg-red-950/30 border border-[#30363d] hover:border-red-500/40 text-gray-400 hover:text-red-300 font-mono text-xs flex items-center gap-1.5 transition-colors"
+                title="Clear all assets from cloud database"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="hidden xl:inline">Clear All</span>
+              </button>
+            )}
           </div>
         </div>
+
+        {/* DEMO ASSETS DETECTED ALERT BANNER */}
+        {demoAssetsCount > 0 && (
+          <div className="mt-4 bg-amber-950/25 border border-amber-500/40 rounded-xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-200">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-white">
+                  {demoAssetsCount} Pre-loaded Demo Asset{demoAssetsCount > 1 ? 's' : ''} in Database
+                </p>
+                <p className="text-[11px] text-amber-300/80">
+                  These are auto-generated sample assets. Click purge to wipe them out completely and keep only your custom saved inventory.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                setIsPurgingDemo(true);
+                try {
+                  await purgeDemoAssets();
+                } finally {
+                  setIsPurgingDemo(false);
+                }
+              }}
+              disabled={isPurgingDemo}
+              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-mono text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-red-950/50 active:scale-95 transition-all shrink-0"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{isPurgingDemo ? 'Purging Demo Assets...' : `Purge All ${demoAssetsCount} Demo Assets`}</span>
+            </button>
+          </div>
+        )}
 
         {/* 6-Card At-A-Glance Metric Strip */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-5 pt-4 border-t border-[#30363d]">
@@ -1783,6 +1856,47 @@ export const AssetInventoryManager: React.FC<AssetInventoryManagerProps> = ({
               >
                 <Printer className="w-3.5 h-3.5" />
                 <span>Print Physical Label</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: CLEAR ALL CONFIRMATION */}
+      {isClearAllModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="bg-[#161b22] border border-red-500/60 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 font-mono text-xs">
+            <div className="flex items-center gap-3 text-red-400">
+              <div className="w-10 h-10 rounded-xl bg-red-950/80 border border-red-500/50 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Clear All Hardware Assets?</h3>
+                <p className="text-[11px] text-gray-400">This will delete all {totalAssets} assets from your cloud database.</p>
+              </div>
+            </div>
+
+            <p className="text-gray-300 text-xs leading-relaxed bg-[#0d1117] p-3 rounded-xl border border-[#30363d]">
+              Are you sure you want to wipe all registered assets? You can re-import a clean inventory anytime from a .json or .csv file.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsClearAllModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-[#0d1117] border border-[#30363d] text-gray-300 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await clearAllHardwareAssets();
+                  setIsClearAllModalOpen(false);
+                }}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold shadow-md shadow-red-950/50"
+              >
+                Yes, Wipe Everything
               </button>
             </div>
           </div>

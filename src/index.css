@@ -33,47 +33,114 @@ button, input, select, textarea {
   touch-action: manipulation;
 }
 
-/* 1Hz rhythmic strobe for Critical / Red status alerts */
-@keyframes strobe1hz {
+/* ==========================================================================
+   COMLAB 6-STATE STATUS LED ANIMATIONS & SHADOWS
+   ========================================================================== */
+
+/* 1. SOLID GREEN: Working fine, powered on, live heartbeat (< 1s) */
+@keyframes solidGreenGlow {
   0%, 100% {
+    filter: drop-shadow(0 0 6px #10b981) drop-shadow(0 0 12px rgba(16, 185, 129, 0.6));
+  }
+}
+.animate-solid-green {
+  animation: solidGreenGlow 2s ease-in-out infinite;
+}
+
+/* 2. BLINKING GREEN: Worked last time, now turned off or stopped transmitting */
+@keyframes blinkGreen1hz {
+  0%, 45% {
     opacity: 1;
-    filter: drop-shadow(0 0 8px #ef4444) drop-shadow(0 0 16px #ef4444);
+    filter: drop-shadow(0 0 7px #10b981) drop-shadow(0 0 14px rgba(16, 185, 129, 0.8));
+  }
+  50%, 95% {
+    opacity: 0.15;
+    filter: drop-shadow(0 0 1px rgba(16, 185, 129, 0.2));
+  }
+  100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 7px #10b981);
+  }
+}
+.animate-blink-green {
+  animation: blinkGreen1hz 1.2s steps(1, start) infinite;
+}
+
+/* 3. BLINKING ORANGE: Bootable with errors / warnings */
+@keyframes blinkOrange1hz {
+  0%, 45% {
+    opacity: 1;
+    filter: drop-shadow(0 0 8px #f59e0b) drop-shadow(0 0 16px rgba(245, 158, 11, 0.8));
+  }
+  50%, 95% {
+    opacity: 0.15;
+    filter: drop-shadow(0 0 1px rgba(245, 158, 11, 0.2));
+  }
+  100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 8px #f59e0b);
+  }
+}
+.animate-blink-orange {
+  animation: blinkOrange1hz 1.1s steps(1, start) infinite;
+}
+
+/* 4. SOLID ORANGE: Warning / Maintenance */
+@keyframes glowOrangePulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 6px #f59e0b) drop-shadow(0 0 12px rgba(245, 158, 11, 0.6));
   }
   50% {
-    opacity: 0.12;
-    filter: drop-shadow(0 0 1px #ef4444);
+    filter: drop-shadow(0 0 3px #f59e0b) drop-shadow(0 0 6px rgba(245, 158, 11, 0.4));
   }
+}
+.animate-glow-orange {
+  animation: glowOrangePulse 2s ease-in-out infinite;
+}
+
+/* 5. BLINKING RED: Bad error, recoverable */
+@keyframes blinkRedFast {
+  0%, 40% {
+    opacity: 1;
+    filter: drop-shadow(0 0 9px #ef4444) drop-shadow(0 0 20px rgba(239, 68, 68, 0.9));
+  }
+  45%, 90% {
+    opacity: 0.15;
+    filter: drop-shadow(0 0 1px rgba(239, 68, 68, 0.2));
+  }
+  100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 9px #ef4444);
+  }
+}
+.animate-blink-red {
+  animation: blinkRedFast 0.75s steps(1, start) infinite;
+}
+
+/* 6. SOLID RED: Critical failure ("PC is FUCKED!") */
+@keyframes solidRedGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 10px #dc2626) drop-shadow(0 0 22px rgba(220, 38, 38, 0.85)) drop-shadow(0 0 30px rgba(220, 38, 38, 0.5));
+  }
+  50% {
+    filter: drop-shadow(0 0 6px #ef4444) drop-shadow(0 0 14px rgba(239, 68, 68, 0.7));
+  }
+}
+.animate-solid-red {
+  animation: solidRedGlow 1.8s ease-in-out infinite;
+}
+
+/* 7. SOLID GRAY: Never connected / no signal */
+.led-solid-gray {
+  filter: drop-shadow(0 0 2px rgba(100, 116, 139, 0.4));
 }
 
 .animate-strobe-1hz {
-  animation: strobe1hz 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* Smooth ambient LED glows */
-@keyframes glowGreenPulse {
-  0%, 100% {
-    filter: drop-shadow(0 0 6px #10b981) drop-shadow(0 0 12px #10b98188);
-  }
-  50% {
-    filter: drop-shadow(0 0 2px #10b981) drop-shadow(0 0 5px #10b98144);
-  }
+  animation: blinkRedFast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 .animate-glow-green {
-  animation: glowGreenPulse 2.4s ease-in-out infinite;
-}
-
-@keyframes glowOrangePulse {
-  0%, 100% {
-    filter: drop-shadow(0 0 6px #f59e0b) drop-shadow(0 0 12px #f59e0b88);
-  }
-  50% {
-    filter: drop-shadow(0 0 2px #f59e0b) drop-shadow(0 0 5px #f59e0b44);
-  }
-}
-
-.animate-glow-orange {
-  animation: glowOrangePulse 2s ease-in-out infinite;
+  animation: solidGreenGlow 2.4s ease-in-out infinite;
 }
 
 /* Exit Door Pulse */

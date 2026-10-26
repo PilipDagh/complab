@@ -103,8 +103,8 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({ isOpen, onCl
         }
 
         const valid: HardwareAsset[] = items.map((item, idx) => {
-          const tag = item.assetTag || item.id || `AST-IMP-${Date.now().toString().slice(-4)}-${idx + 1}`;
-          return {
+          const tag = (item.assetTag || item.id || `AST-IMP-${Date.now().toString().slice(-4)}-${idx + 1}`).trim();
+          const cleanAsset: HardwareAsset = {
             id: tag,
             assetTag: tag,
             serialNumber: item.serialNumber || 'SN-UNKNOWN',
@@ -114,17 +114,28 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({ isOpen, onCl
             department: item.department || 'Vocational IT Lab',
             status: item.status || 'In Service',
             kanbanStage: item.kanbanStage || 'intake',
-            isCurrentlyOnHand: item.isCurrentlyOnHand !== undefined ? item.isCurrentlyOnHand : true,
-            problemLabel: item.problemLabel || undefined,
-            specs: item.specs || {},
-            qaReview: item.qaReview || undefined,
-            purchaseDate: item.purchaseDate || undefined,
-            warrantyExpiry: item.warrantyExpiry || undefined,
+            isCurrentlyOnHand: item.isCurrentlyOnHand !== undefined ? Boolean(item.isCurrentlyOnHand) : true,
+            specs: item.specs && typeof item.specs === 'object' ? item.specs : {},
             notes: item.notes || `Imported from ${file.name}`,
             repairHistory: Array.isArray(item.repairHistory) ? item.repairHistory : [],
             createdAt: item.createdAt || new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };
+
+          if (item.problemLabel) {
+            cleanAsset.problemLabel = item.problemLabel;
+          }
+          if (item.qaReview) {
+            cleanAsset.qaReview = item.qaReview;
+          }
+          if (item.purchaseDate) {
+            cleanAsset.purchaseDate = item.purchaseDate;
+          }
+          if (item.warrantyExpiry) {
+            cleanAsset.warrantyExpiry = item.warrantyExpiry;
+          }
+
+          return cleanAsset;
         });
 
         if (valid.length === 0) {

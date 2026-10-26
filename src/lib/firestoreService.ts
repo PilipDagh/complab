@@ -21,6 +21,9 @@ import {
   AssetRepairLog,
   ComLabWorkstation,
   ComLabLayoutConfig,
+  LabInventoryItem,
+  LabLocation,
+  QualityInspection,
 } from '../types';
 
 export enum OperationType {
@@ -377,17 +380,63 @@ export async function getHardwareAssetFromFirestore(assetIdOrTag: string): Promi
   }
 }
 
+/**
+ * Recursively removes all `undefined` values from an object or array.
+ * Firestore throws a runtime error if any field is undefined.
+ */
+export function sanitizeForFirestore<T>(data: T): T {
+  if (data === undefined) {
+    return null as any;
+  }
+  if (data === null || typeof data !== 'object') {
+    return data;
+  }
+  if (Array.isArray(data)) {
+    return data
+      .filter((item) => item !== undefined)
+      .map((item) => sanitizeForFirestore(item)) as any;
+  }
+  const clean: Record<string, any> = {};
+  for (const [key, val] of Object.entries(data as Record<string, any>)) {
+    if (val !== undefined) {
+      clean[key] = sanitizeForFirestore(val);
+    }
+  }
+  return clean as T;
+}
+
+export const DEMO_ASSET_IDS = [
+  'AST-DELL-7090',
+  'AST-LENOVO-T14',
+  'AST-CISCO-2960X',
+  'AST-RIG-VRM01',
+  'AST-CORSAIR-RM850',
+  'AST-CISCO-C9200',
+  'AST-PROXMOX-R740',
+  'AST-RIG-AM5-BENCH',
+  'AST-PC3000-EXP',
+  'AST-FLUKE-DSX8000',
+  'AST-QUICK-861DW',
+  'AST-HAKKO-FM203',
+  'AST-RIGOL-DS1054Z',
+  'AST-CLEAN-HOOD-100',
+];
+
 export async function saveHardwareAssetToFirestore(asset: HardwareAsset): Promise<void> {
-  const docId = asset.id || asset.assetTag;
+  const docId = (asset.id || asset.assetTag || `AST-${Date.now()}`).trim();
   const path = `hardware_assets/${docId}`;
   try {
-    await setDoc(doc(db, 'hardware_assets', docId), {
+    const sanitized = sanitizeForFirestore({
       ...asset,
+      id: docId,
+      assetTag: asset.assetTag || docId,
       updatedAt: new Date().toISOString(),
       authorUid: auth.currentUser?.uid || 'anonymous',
     });
+    await setDoc(doc(db, 'hardware_assets', docId), sanitized, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
+    throw error;
   }
 }
 
@@ -395,24 +444,43 @@ export async function batchImportHardwareAssets(
   assets: HardwareAsset[]
 ): Promise<{ success: boolean; count: number }> {
   const path = 'hardware_assets';
+  if (!assets || assets.length === 0) return { success: true, count: 0 };
+
   try {
-    const batch = writeBatch(db);
     const now = new Date().toISOString();
-    assets.forEach((asset) => {
-      const docId = asset.id || asset.assetTag;
-      const ref = doc(db, 'hardware_assets', docId);
-      batch.set(ref, {
-        ...asset,
-        id: docId,
-        updatedAt: now,
-        authorUid: auth.currentUser?.uid || 'import_tool',
-      }, { merge: true });
-    });
-    await batch.commit();
-    return { success: true, count: assets.length };
+    const BATCH_SIZE = 350; // Firestore limit is 500 operations per write batch
+    let totalImported = 0;
+
+    for (let i = 0; i < assets.length; i += BATCH_SIZE) {
+      const chunk = assets.slice(i, i + BATCH_SIZE);
+      const batch = writeBatch(db);
+
+      chunk.forEach((asset, idx) => {
+        const docId = (
+          asset.id ||
+          asset.assetTag ||
+          `AST-IMP-${Date.now()}-${i + idx}`
+        ).trim();
+        const ref = doc(db, 'hardware_assets', docId);
+        const sanitized = sanitizeForFirestore({
+          ...asset,
+          id: docId,
+          assetTag: asset.assetTag || docId,
+          updatedAt: now,
+          authorUid: auth.currentUser?.uid || 'import_tool',
+        });
+        batch.set(ref, sanitized, { merge: true });
+      });
+
+      await batch.commit();
+      totalImported += chunk.length;
+    }
+
+    return { success: true, count: totalImported };
   } catch (error) {
+    console.error('Error during batchImportHardwareAssets:', error);
     handleFirestoreError(error, OperationType.WRITE, path);
-    return { success: false, count: 0 };
+    throw error;
   }
 }
 
@@ -422,12 +490,14 @@ export async function updateHardwareAssetInFirestore(
 ): Promise<void> {
   const path = `hardware_assets/${assetId}`;
   try {
-    await updateDoc(doc(db, 'hardware_assets', assetId), {
+    const sanitized = sanitizeForFirestore({
       ...updates,
       updatedAt: new Date().toISOString(),
     });
+    await updateDoc(doc(db, 'hardware_assets', assetId), sanitized);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
+    throw error;
   }
 }
 
@@ -438,13 +508,14 @@ export async function addRepairLogToAssetInFirestore(
 ): Promise<void> {
   const path = `hardware_assets/${assetId}`;
   try {
-    const updatedHistory = [newLog, ...currentHistory];
+    const updatedHistory = sanitizeForFirestore([newLog, ...currentHistory]);
     await updateDoc(doc(db, 'hardware_assets', assetId), {
       repairHistory: updatedHistory,
       updatedAt: new Date().toISOString(),
     });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
+    throw error;
   }
 }
 
@@ -454,6 +525,39 @@ export async function deleteHardwareAssetFromFirestore(assetId: string): Promise
     await deleteDoc(doc(db, 'hardware_assets', assetId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
+    throw error;
+  }
+}
+
+export async function purgeDemoAssetsFromFirestore(): Promise<number> {
+  const path = 'hardware_assets';
+  try {
+    const batch = writeBatch(db);
+    let count = 0;
+    for (const id of DEMO_ASSET_IDS) {
+      batch.delete(doc(db, 'hardware_assets', id));
+      count++;
+    }
+    await batch.commit();
+    return count;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+    throw error;
+  }
+}
+
+export async function clearAllHardwareAssetsFromFirestore(): Promise<number> {
+  const path = 'hardware_assets';
+  try {
+    const snap = await getDocs(collection(db, path));
+    if (snap.empty) return 0;
+    const batch = writeBatch(db);
+    snap.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+    return snap.docs.length;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+    throw error;
   }
 }
 
@@ -493,19 +597,65 @@ export async function fetchComLabWorkstationsFromFirestore(): Promise<ComLabWork
   }
 }
 
+export function subscribeToComLabWorkstations(
+  onUpdate: (workstations: ComLabWorkstation[]) => void,
+  onError?: (error: any) => void
+): () => void {
+  const path = 'comlab_workstations';
+  return onSnapshot(
+    collection(db, path),
+    (snapshot) => {
+      if (snapshot.empty) {
+        onUpdate([]);
+        return;
+      }
+      const workstations = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          rowId: data.rowId || 'A',
+          rowLabel: data.rowLabel || `Row ${data.rowId || 'A'}`,
+          slotNumber: data.slotNumber ?? 1,
+          displayName: data.displayName || `PC ${data.rowId || 'A'}${data.slotNumber ?? 1}`,
+          statusLevel: data.statusLevel || 'unconfigured',
+          powerState: data.powerState || 'standby',
+          isConfigured: data.isConfigured ?? false,
+          components: data.components || { hasParts: true },
+          notes: data.notes || '',
+          issueDescription: data.issueDescription || '',
+          assignedTechnician: data.assignedTechnician || '',
+          lastInspected: data.lastInspected || undefined,
+          lastUpdated: data.lastUpdated || new Date().toISOString(),
+          updatedBy: data.updatedBy || 'System',
+          telemetry: data.telemetry || undefined,
+        } as ComLabWorkstation;
+      });
+      onUpdate(workstations);
+    },
+    (error) => {
+      console.error('Real-time comlab_workstations sync error:', error);
+      if (onError) onError(error);
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
 export async function saveComLabWorkstationToFirestore(
   workstation: ComLabWorkstation
 ): Promise<void> {
   const docId = workstation.id;
   const path = `comlab_workstations/${docId}`;
   try {
-    await setDoc(doc(db, 'comlab_workstations', docId), {
+    const sanitized = sanitizeForFirestore({
       ...workstation,
+      id: docId,
       lastUpdated: new Date().toISOString(),
       updatedBy: auth.currentUser?.displayName || workstation.updatedBy || 'Technician',
     });
+    await setDoc(doc(db, 'comlab_workstations', docId), sanitized, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
+    throw error;
   }
 }
 
@@ -514,11 +664,15 @@ export async function saveAllComLabWorkstationsToFirestore(
 ): Promise<void> {
   const path = 'comlab_workstations';
   try {
+    const batch = writeBatch(db);
     for (const ws of workstations) {
-      await setDoc(doc(db, 'comlab_workstations', ws.id), ws);
+      const sanitized = sanitizeForFirestore(ws);
+      batch.set(doc(db, 'comlab_workstations', ws.id), sanitized, { merge: true });
     }
+    await batch.commit();
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
+    throw error;
   }
 }
 
@@ -558,5 +712,245 @@ export async function saveComLabLayoutToFirestore(
     handleFirestoreError(error, OperationType.WRITE, path);
   }
 }
+
+// ==============================================================================
+// LAB LOCATIONS FIRESTORE SERVICES
+// ==============================================================================
+
+export function subscribeToLabLocations(
+  onUpdate: (locations: LabLocation[]) => void,
+  onError?: (error: Error) => void
+) {
+  const path = 'lab_locations';
+  return onSnapshot(
+    collection(db, path),
+    (snapshot) => {
+      const locations = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          name: data.name || 'Unassigned Location',
+          zoneType: data.zoneType || 'tool_storage',
+          description: data.description || '',
+          itemCount: typeof data.itemCount === 'number' ? data.itemCount : 0,
+          createdAt: data.createdAt || new Date().toISOString(),
+          createdBy: data.createdBy || 'Technician',
+          updatedAt: data.updatedAt,
+        } as LabLocation;
+      });
+      // Sort alphabetically by name
+      locations.sort((a, b) => a.name.localeCompare(b.name));
+      onUpdate(locations);
+    },
+    (error) => {
+      console.error('Real-time lab_locations sync error:', error);
+      if (onError) onError(error);
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function saveLabLocationToFirestore(loc: LabLocation): Promise<void> {
+  const docId = loc.id || `loc_${Date.now()}`;
+  const path = `lab_locations/${docId}`;
+  try {
+    const sanitized = sanitizeForFirestore({
+      ...loc,
+      id: docId,
+      updatedAt: new Date().toISOString(),
+    });
+    await setDoc(doc(db, 'lab_locations', docId), sanitized, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+    throw error;
+  }
+}
+
+export async function deleteLabLocationFromFirestore(locationId: string): Promise<void> {
+  const path = `lab_locations/${locationId}`;
+  try {
+    await deleteDoc(doc(db, 'lab_locations', locationId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+    throw error;
+  }
+}
+
+// ==============================================================================
+// TOOLS & SUPPLIES INVENTORY FIRESTORE SERVICES
+// ==============================================================================
+
+export function subscribeToToolsAndSupplies(
+  onUpdate: (items: LabInventoryItem[]) => void,
+  onError?: (error: Error) => void
+) {
+  const path = 'tools_supplies';
+  return onSnapshot(
+    collection(db, path),
+    (snapshot) => {
+      const items = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          name: data.name || 'Unnamed Item',
+          itemType: data.itemType || 'tool',
+          category: data.category || 'General',
+          skuOrTag: data.skuOrTag || '',
+          brand: data.brand || '',
+          model: data.model || '',
+          serialNumber: data.serialNumber || '',
+          locationId: data.locationId || undefined,
+          locationName: data.locationName || undefined,
+          status: data.status || 'available',
+          condition: data.condition || 'good',
+          checkedOutBy: data.checkedOutBy || undefined,
+          quantityOnHand: typeof data.quantityOnHand === 'number' ? data.quantityOnHand : undefined,
+          unitOfMeasure: data.unitOfMeasure || 'units',
+          minReorderLevel: typeof data.minReorderLevel === 'number' ? data.minReorderLevel : undefined,
+          purchaseDate: data.purchaseDate || undefined,
+          cost: typeof data.cost === 'number' ? data.cost : undefined,
+          notes: data.notes || '',
+          barcode: data.barcode || '',
+          photoUrl: data.photoUrl || undefined,
+          createdAt: data.createdAt || new Date().toISOString(),
+          updatedAt: data.updatedAt || new Date().toISOString(),
+          updatedBy: data.updatedBy || 'Technician',
+        } as LabInventoryItem;
+      });
+      onUpdate(items);
+    },
+    (error) => {
+      console.error('Real-time tools_supplies sync error:', error);
+      if (onError) onError(error);
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function saveToolOrSupplyToFirestore(item: LabInventoryItem): Promise<void> {
+  const docId = item.id || `item_${Date.now()}`;
+  const path = `tools_supplies/${docId}`;
+  try {
+    const sanitized = sanitizeForFirestore({
+      ...item,
+      id: docId,
+      updatedAt: new Date().toISOString(),
+      updatedBy: auth.currentUser?.displayName || item.updatedBy || 'Technician',
+    });
+    await setDoc(doc(db, 'tools_supplies', docId), sanitized, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+    throw error;
+  }
+}
+
+export async function deleteToolOrSupplyFromFirestore(itemId: string): Promise<void> {
+  const path = `tools_supplies/${itemId}`;
+  try {
+    await deleteDoc(doc(db, 'tools_supplies', itemId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+    throw error;
+  }
+}
+
+// ==============================================================================
+// QUALITY INSPECTIONS FIRESTORE SERVICES
+// ==============================================================================
+
+export function subscribeToQualityInspections(
+  onUpdate: (inspections: QualityInspection[]) => void,
+  onError?: (error: Error) => void
+) {
+  const path = 'quality_inspections';
+  return onSnapshot(
+    collection(db, path),
+    (snapshot) => {
+      const inspections = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          certificateNumber: data.certificateNumber || `TT-QA-${docSnap.id.slice(-4).toUpperCase()}`,
+          workOrderId: data.workOrderId || undefined,
+          assetTag: data.assetTag || undefined,
+          deviceModel: data.deviceModel || 'General Device',
+          serialNumber: data.serialNumber || undefined,
+          deviceType: data.deviceType || 'Desktop Tower',
+          clientOrRecipient: data.clientOrRecipient || 'Client',
+          technicianName: data.technicianName || 'Technician',
+          inspectorName: data.inspectorName || 'Lead Inspector',
+          inspectionDate: data.inspectionDate || new Date().toISOString(),
+          checks: data.checks || {
+            powerSupplyGroundVerified: true,
+            cablesInsulatedNoExposedWire: true,
+            powerRailVoltagesNormal: true,
+            esdGroundingDischarged: true,
+            cpuThermalsUnderLoadPass: true,
+            maxCpuTempCelsius: 65,
+            ramMemtestStable: true,
+            storageSmartHealthClean: true,
+            gpuStabilityTestPass: true,
+            coolingFansSpinFreely: true,
+            cleanOsInstalledAndActivated: true,
+            allDriversFunctionalNoUnknown: true,
+            benchProfilesRemoved: true,
+            biosFirmwareUpdated: true,
+            antivirusEnabledAndUpdated: true,
+            chassisCleanedAndSanitized: true,
+            screenSpotlessNoFingerprints: true,
+            portsDustFree: true,
+            accessoriesAndPowerLeadBagged: true,
+          },
+          overallStatus: data.overallStatus || 'passed',
+          inspectorNotes: data.inspectorNotes || '',
+          benchVoltagesRecorded: data.benchVoltagesRecorded || '',
+          approvedForOutboundRelease: data.approvedForOutboundRelease ?? true,
+          certificateHash: data.certificateHash || undefined,
+          createdAt: data.createdAt || new Date().toISOString(),
+          updatedAt: data.updatedAt || new Date().toISOString(),
+        } as QualityInspection;
+      });
+      // Sort newest first
+      inspections.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      onUpdate(inspections);
+    },
+    (error) => {
+      console.error('Real-time quality_inspections sync error:', error);
+      if (onError) onError(error);
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function saveQualityInspectionToFirestore(
+  inspection: QualityInspection
+): Promise<void> {
+  const docId = inspection.id || `qa_${Date.now()}`;
+  const path = `quality_inspections/${docId}`;
+  try {
+    const sanitized = sanitizeForFirestore({
+      ...inspection,
+      id: docId,
+      updatedAt: new Date().toISOString(),
+    });
+    await setDoc(doc(db, 'quality_inspections', docId), sanitized, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+    throw error;
+  }
+}
+
+export async function deleteQualityInspectionFromFirestore(
+  inspectionId: string
+): Promise<void> {
+  const path = `quality_inspections/${inspectionId}`;
+  try {
+    await deleteDoc(doc(db, 'quality_inspections', inspectionId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+    throw error;
+  }
+}
+
 
 

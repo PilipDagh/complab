@@ -17,6 +17,8 @@ import { SignalIntegritySuite } from './components/SignalIntegritySuite';
 import { AssetInventoryManager } from './components/AssetInventoryManager';
 import { TechnicianTimeClockSuite } from './components/TechnicianTimeClockSuite';
 import { ComLabStatusSuite } from './components/comlab/ComLabStatusSuite';
+import { ToolsSuppliesSuite } from './components/tools/ToolsSuppliesSuite';
+import { QualityEnsurerSuite } from './components/quality/QualityEnsurerSuite';
 import { LabManualGuide } from './components/LabManualGuide';
 import { RoleQuickActionsBar } from './components/RoleQuickActionsBar';
 import { SettingsModal } from './components/SettingsModal';
@@ -176,6 +178,9 @@ const MainContent: React.FC = () => {
         {activeTab === 'calendar' && <LabCalendar />}
         {activeTab === 'assets' && <AssetInventoryManager />}
         {activeTab === 'time_clock' && <TechnicianTimeClockSuite />}
+        {activeTab === 'comlab' && <ComLabStatusSuite />}
+        {activeTab === 'tools' && <ToolsSuppliesSuite />}
+        {activeTab === 'quality' && <QualityEnsurerSuite />}
         {activeTab === 'manual' && <LabManualGuide />}
       </main>
 

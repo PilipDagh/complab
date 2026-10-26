@@ -14,6 +14,10 @@ import {
   ComLabLayoutConfig,
   LabJobRole,
   ThemeMode,
+  LabInventoryItem,
+  LabLocation,
+  QualityInspection,
+  ToolCondition,
 } from '../types';
 import {
   INITIAL_USERS,
@@ -24,6 +28,9 @@ import {
   INITIAL_TIME_CLOCK_ENTRIES,
   INITIAL_COMLAB_LAYOUT,
   INITIAL_COMLAB_WORKSTATIONS,
+  INITIAL_LAB_LOCATIONS,
+  INITIAL_TOOLS_AND_SUPPLIES,
+  INITIAL_QUALITY_INSPECTIONS,
 } from '../data/seedData';
 import { auth, googleAuthProvider } from '../lib/firebase.ts';
 import {
@@ -51,11 +58,24 @@ import {
   updateHardwareAssetInFirestore,
   addRepairLogToAssetInFirestore,
   deleteHardwareAssetFromFirestore,
+  purgeDemoAssetsFromFirestore,
+  clearAllHardwareAssetsFromFirestore,
+  DEMO_ASSET_IDS,
   fetchComLabWorkstationsFromFirestore,
+  subscribeToComLabWorkstations,
   saveComLabWorkstationToFirestore,
   saveAllComLabWorkstationsToFirestore,
   fetchComLabLayoutFromFirestore,
   saveComLabLayoutToFirestore,
+  subscribeToLabLocations,
+  saveLabLocationToFirestore,
+  deleteLabLocationFromFirestore,
+  subscribeToToolsAndSupplies,
+  saveToolOrSupplyToFirestore,
+  deleteToolOrSupplyFromFirestore,
+  subscribeToQualityInspections,
+  saveQualityInspectionToFirestore,
+  deleteQualityInspectionFromFirestore,
 } from '../lib/firestoreService.ts';
 
 export type AppTab =
@@ -72,6 +92,8 @@ export type AppTab =
   | 'assets'
   | 'time_clock'
   | 'comlab'
+  | 'tools'
+  | 'quality'
   | 'manual';
 
 export interface ToastMessage {
@@ -160,6 +182,8 @@ interface AppContextType {
   importHardwareAssets: (assets: HardwareAsset[]) => Promise<{ count: number }>;
   addAssetRepairLog: (assetId: string, log: Omit<AssetRepairLog, 'id' | 'date'>) => Promise<void>;
   deleteHardwareAsset: (assetId: string) => Promise<void>;
+  purgeDemoAssets: () => Promise<number>;
+  clearAllHardwareAssets: () => Promise<number>;
 
   // Time Clock & Shift Task Logs
   timeClockEntries: TimeClockEntry[];
@@ -208,6 +232,32 @@ interface AppContextType {
 
   // Job Role Management (Teacher / Admin)
   updateUserJobs: (userId: string, jobs: LabJobRole[]) => Promise<void>;
+
+  // Tools, Supplies & Equipment Inventory
+  toolsAndSupplies: LabInventoryItem[];
+  labLocations: LabLocation[];
+  addToolOrSupplyItem: (item: Omit<LabInventoryItem, 'id' | 'createdAt' | 'updatedAt' | 'updatedBy'>) => Promise<void>;
+  updateToolOrSupplyItem: (id: string, updates: Partial<LabInventoryItem>) => Promise<void>;
+  deleteToolOrSupplyItem: (id: string) => Promise<void>;
+  checkoutToolItem: (
+    itemId: string,
+    checkout: { userId: string; userName: string; benchStation: string; expectedReturn?: string; taskNotes?: string }
+  ) => Promise<void>;
+  returnToolItem: (itemId: string, returnNotes?: string, condition?: ToolCondition) => Promise<void>;
+  useConsumableSupply: (itemId: string, quantityUsed: number, purposeNotes?: string) => Promise<void>;
+
+  // Custom Location Management
+  addLabLocation: (location: Omit<LabLocation, 'id' | 'createdAt' | 'itemCount'>) => Promise<LabLocation>;
+  updateLabLocation: (id: string, updates: Partial<LabLocation>) => Promise<void>;
+  deleteLabLocation: (id: string) => Promise<void>;
+
+  // Quality Ensurer Certification
+  qualityInspections: QualityInspection[];
+  addQualityInspection: (
+    inspection: Omit<QualityInspection, 'id' | 'certificateNumber' | 'certificateHash' | 'createdAt' | 'updatedAt'>
+  ) => Promise<QualityInspection>;
+  updateQualityInspection: (id: string, updates: Partial<QualityInspection>) => Promise<void>;
+  deleteQualityInspection: (id: string) => Promise<void>;
 
   // Toast
   toasts: ToastMessage[];
@@ -271,11 +321,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
 
-  // Hardware Assets & QR Scanner State
-  const [hardwareAssets, setHardwareAssets] = useState<HardwareAsset[]>(INITIAL_HARDWARE_ASSETS);
+  // Hardware Assets & QR Scanner State: Start with locally saved cache or empty array, NEVER the 14 mock assets!
+  const [hardwareAssets, setHardwareAssets] = useState<HardwareAsset[]>(() => {
+    try {
+      const saved = localStorage.getItem('tradetech_saved_hardware_assets');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.warn('Failed reading hardware assets from localStorage', e);
+    }
+    return [];
+  });
   const [activeScannedAsset, setActiveScannedAsset] = useState<HardwareAsset | null>(null);
   const [isScannerModalOpen, setIsScannerModalOpen] = useState<boolean>(false);
   const [isPhotoAutofillModalOpen, setIsPhotoAutofillModalOpen] = useState<boolean>(false);
+
+  // Auto-backup hardware assets to localStorage whenever updated
+  useEffect(() => {
+    try {
+      localStorage.setItem('tradetech_saved_hardware_assets', JSON.stringify(hardwareAssets));
+    } catch (e) {
+      console.warn('Failed saving hardware assets to localStorage', e);
+    }
+  }, [hardwareAssets]);
 
   // Time Clock & Shift Task Logs State
   const [timeClockEntries, setTimeClockEntries] = useState<TimeClockEntry[]>(INITIAL_TIME_CLOCK_ENTRIES);
@@ -302,6 +372,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [selectedWorkstationId, setSelectedWorkstationId] = useState<string | null>(null);
+
+  // Tools, Supplies & Physical Lab Locations State
+  const [labLocations, setLabLocations] = useState<LabLocation[]>(() => {
+    try {
+      const saved = localStorage.getItem('tradetech_lab_locations');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn('Failed reading lab locations cache', e);
+    }
+    return INITIAL_LAB_LOCATIONS;
+  });
+
+  const [toolsAndSupplies, setToolsAndSupplies] = useState<LabInventoryItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('tradetech_tools_supplies');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn('Failed reading tools & supplies cache', e);
+    }
+    return INITIAL_TOOLS_AND_SUPPLIES;
+  });
+
+  const [qualityInspections, setQualityInspections] = useState<QualityInspection[]>(() => {
+    try {
+      const saved = localStorage.getItem('tradetech_quality_inspections');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn('Failed reading quality inspections cache', e);
+    }
+    return INITIAL_QUALITY_INSPECTIONS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('tradetech_lab_locations', JSON.stringify(labLocations));
+    } catch (e) {
+      console.warn('Failed saving lab locations cache', e);
+    }
+  }, [labLocations]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('tradetech_tools_supplies', JSON.stringify(toolsAndSupplies));
+    } catch (e) {
+      console.warn('Failed saving tools supplies cache', e);
+    }
+  }, [toolsAndSupplies]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('tradetech_quality_inspections', JSON.stringify(qualityInspections));
+    } catch (e) {
+      console.warn('Failed saving quality inspections cache', e);
+    }
+  }, [qualityInspections]);
 
   // Toast System
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -474,20 +599,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setProjects([]);
         }
 
-        // Initial fetch of Hardware Assets from Firestore
+        // Initial fetch of Hardware Assets from Firestore (Load user cloud assets, NEVER auto-seed mock data)
         const fsAssets = await fetchHardwareAssetsFromFirestore();
         if (fsAssets && fsAssets.length > 0) {
           setHardwareAssets(fsAssets);
         } else {
-          setHardwareAssets(INITIAL_HARDWARE_ASSETS);
-          // Seed initial hardware assets to Firestore asynchronously
-          for (const initAsset of INITIAL_HARDWARE_ASSETS) {
-            try {
-              await saveHardwareAssetToFirestore(initAsset);
-            } catch (seedErr) {
-              console.warn('Initial asset seed fallback:', seedErr);
-            }
-          }
+          // Keep empty or preserved from local session, NEVER seed demo mock assets!
+          setHardwareAssets((prev) => (prev.length > 0 ? prev : []));
         }
 
         // Fetch ComLab Workstations from Firestore
@@ -521,18 +639,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Real-Time Cross-Device Sync: Subscribe to live changes in hardware_assets collection
     const unsubscribeAssets = subscribeToHardwareAssets((remoteAssets) => {
-      if (remoteAssets && remoteAssets.length > 0) {
-        setHardwareAssets(remoteAssets);
-        setActiveScannedAsset((curr) => {
-          if (!curr) return null;
-          const found = remoteAssets.find((a) => a.id === curr.id || a.assetTag === curr.assetTag);
-          return found || curr;
-        });
+      setHardwareAssets(remoteAssets || []);
+      setActiveScannedAsset((curr) => {
+        if (!curr) return null;
+        const found = (remoteAssets || []).find((a) => a.id === curr.id || a.assetTag === curr.assetTag);
+        return found || null;
+      });
+    });
+
+    // Real-Time Cross-Device Sync: Subscribe to live changes in comlab_workstations collection
+    const unsubscribeWorkstations = subscribeToComLabWorkstations((remoteWs) => {
+      if (remoteWs && remoteWs.length > 0) {
+        setComLabWorkstations(remoteWs);
+        try {
+          localStorage.setItem('tradetech_comlab_workstations', JSON.stringify(remoteWs));
+        } catch (e) {
+          console.warn('LocalStorage save error', e);
+        }
+      }
+    });
+
+    // Real-Time Sync: Lab Locations
+    const unsubscribeLocations = subscribeToLabLocations((remoteLocs) => {
+      if (remoteLocs && remoteLocs.length > 0) {
+        setLabLocations(remoteLocs);
+      }
+    });
+
+    // Real-Time Sync: Tools & Supplies
+    const unsubscribeTools = subscribeToToolsAndSupplies((remoteTools) => {
+      if (remoteTools && remoteTools.length > 0) {
+        setToolsAndSupplies(remoteTools);
+      }
+    });
+
+    // Real-Time Sync: Quality Inspections
+    const unsubscribeQA = subscribeToQualityInspections((remoteQA) => {
+      if (remoteQA && remoteQA.length > 0) {
+        setQualityInspections(remoteQA);
       }
     });
 
     return () => {
       unsubscribeAssets();
+      unsubscribeWorkstations();
+      unsubscribeLocations();
+      unsubscribeTools();
+      unsubscribeQA();
     };
   }, []);
 
@@ -948,27 +1101,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const saveHardwareAsset = async (asset: HardwareAsset) => {
+    const docId = (asset.id || asset.assetTag || `AST-${Date.now()}`).trim();
+    const preparedAsset: HardwareAsset = {
+      ...asset,
+      id: docId,
+      assetTag: asset.assetTag || docId,
+      updatedAt: new Date().toISOString(),
+    };
+
+    // 1. Optimistic state update & instant localStorage backup
     setHardwareAssets((prev) => {
-      const exists = prev.some((a) => a.id === asset.id || a.assetTag === asset.assetTag);
-      return exists
-        ? prev.map((a) => (a.id === asset.id || a.assetTag === asset.assetTag ? asset : a))
-        : [asset, ...prev];
+      const exists = prev.some((a) => a.id === docId || a.assetTag === docId);
+      const next = exists
+        ? prev.map((a) => (a.id === docId || a.assetTag === docId ? preparedAsset : a))
+        : [preparedAsset, ...prev];
+      try {
+        localStorage.setItem('tradetech_saved_hardware_assets', JSON.stringify(next));
+      } catch (e) {
+        console.warn('LocalStorage save error', e);
+      }
+      return next;
     });
 
-    if (activeScannedAsset?.id === asset.id || activeScannedAsset?.assetTag === asset.assetTag) {
-      setActiveScannedAsset(asset);
+    if (activeScannedAsset?.id === docId || activeScannedAsset?.assetTag === docId) {
+      setActiveScannedAsset(preparedAsset);
     }
 
-    // Persist to Firestore
+    // 2. Direct Firestore Cloud save
     try {
-      await saveHardwareAssetToFirestore(asset);
+      await saveHardwareAssetToFirestore(preparedAsset);
       addToast({
         type: 'success',
-        title: 'Asset Saved to Firestore',
-        message: `Hardware asset [${asset.assetTag}] stored in cloud database.`,
+        title: 'Asset Saved to Cloud',
+        message: `Hardware asset [${preparedAsset.assetTag}] stored in cloud database.`,
       });
     } catch (err) {
       console.error('Error saving hardware asset to Firestore:', err);
+      addToast({
+        type: 'error',
+        title: 'Cloud Save Failed',
+        message: 'Could not sync asset to Firestore. Saved locally.',
+      });
     }
   };
 
@@ -1020,7 +1193,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteHardwareAsset = async (assetId: string) => {
-    setHardwareAssets((prev) => prev.filter((a) => a.id !== assetId && a.assetTag !== assetId));
+    setHardwareAssets((prev) => {
+      const next = prev.filter((a) => a.id !== assetId && a.assetTag !== assetId);
+      try {
+        localStorage.setItem('tradetech_saved_hardware_assets', JSON.stringify(next));
+      } catch (e) {
+        console.warn('LocalStorage save error', e);
+      }
+      return next;
+    });
+
     if (activeScannedAsset?.id === assetId || activeScannedAsset?.assetTag === assetId) {
       setActiveScannedAsset(null);
     }
@@ -1030,7 +1212,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast({
         type: 'warning',
         title: 'Asset Deleted',
-        message: `Hardware asset [${assetId}] deleted from Firestore.`,
+        message: `Hardware asset [${assetId}] deleted from cloud database.`,
       });
     } catch (err) {
       console.error('Error deleting hardware asset in Firestore:', err);
@@ -1038,9 +1220,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateHardwareAsset = async (assetId: string, updates: Partial<HardwareAsset>) => {
-    setHardwareAssets((prev) =>
-      prev.map((a) => (a.id === assetId || a.assetTag === assetId ? { ...a, ...updates, updatedAt: new Date().toISOString() } : a))
-    );
+    setHardwareAssets((prev) => {
+      const next = prev.map((a) =>
+        a.id === assetId || a.assetTag === assetId
+          ? { ...a, ...updates, updatedAt: new Date().toISOString() }
+          : a
+      );
+      try {
+        localStorage.setItem('tradetech_saved_hardware_assets', JSON.stringify(next));
+      } catch (e) {
+        console.warn('LocalStorage save error', e);
+      }
+      return next;
+    });
+
     if (activeScannedAsset?.id === assetId || activeScannedAsset?.assetTag === assetId) {
       setActiveScannedAsset((prev) => (prev ? { ...prev, ...updates, updatedAt: new Date().toISOString() } : null));
     }
@@ -1052,14 +1245,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const importHardwareAssets = async (incomingAssets: HardwareAsset[]): Promise<{ count: number }> => {
-    // 1. Optimistically update local state
+    if (!incomingAssets || incomingAssets.length === 0) return { count: 0 };
+
+    // 1. Optimistically update local state & backup to localStorage
     setHardwareAssets((prev) => {
       const map = new Map(prev.map((a) => [a.id || a.assetTag, a]));
       incomingAssets.forEach((item) => {
         const id = item.id || item.assetTag;
         map.set(id, item);
       });
-      return Array.from(map.values());
+      const next = Array.from(map.values());
+      try {
+        localStorage.setItem('tradetech_saved_hardware_assets', JSON.stringify(next));
+      } catch (e) {
+        console.warn('LocalStorage save error', e);
+      }
+      return next;
     });
 
     // 2. Commit batch write to Firestore so all devices get real-time update
@@ -1067,8 +1268,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const res = await batchImportHardwareAssets(incomingAssets);
       addToast({
         type: 'success',
-        title: 'Assets Imported & Synced',
-        message: `Successfully synchronized ${res.count} hardware assets across all lab devices.`,
+        title: 'Assets Imported & Saved',
+        message: `Successfully synchronized ${res.count} assets to your cloud database.`,
       });
       return { count: res.count };
     } catch (err) {
@@ -1079,6 +1280,64 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         message: 'Could not sync all assets to Firestore. Check connection.',
       });
       return { count: incomingAssets.length };
+    }
+  };
+
+  const purgeDemoAssets = async (): Promise<number> => {
+    const demoSet = new Set(DEMO_ASSET_IDS);
+    setHardwareAssets((prev) => {
+      const next = prev.filter((a) => !demoSet.has(a.id) && !demoSet.has(a.assetTag));
+      try {
+        localStorage.setItem('tradetech_saved_hardware_assets', JSON.stringify(next));
+      } catch (e) {
+        console.warn('LocalStorage save error', e);
+      }
+      return next;
+    });
+
+    if (activeScannedAsset && (demoSet.has(activeScannedAsset.id) || demoSet.has(activeScannedAsset.assetTag))) {
+      setActiveScannedAsset(null);
+    }
+
+    try {
+      const purged = await purgeDemoAssetsFromFirestore();
+      addToast({
+        type: 'success',
+        title: 'Demo Assets Purged',
+        message: `Removed ${purged} pre-made demo items from your cloud database.`,
+      });
+      return purged;
+    } catch (err) {
+      console.error('Error purging demo assets:', err);
+      addToast({
+        type: 'error',
+        title: 'Purge Failed',
+        message: 'Could not remove demo assets from Firestore.',
+      });
+      return 0;
+    }
+  };
+
+  const clearAllHardwareAssets = async (): Promise<number> => {
+    setHardwareAssets([]);
+    setActiveScannedAsset(null);
+    try {
+      localStorage.setItem('tradetech_saved_hardware_assets', '[]');
+    } catch (e) {
+      console.warn('LocalStorage clear error', e);
+    }
+
+    try {
+      const cleared = await clearAllHardwareAssetsFromFirestore();
+      addToast({
+        type: 'warning',
+        title: 'Inventory Cleared',
+        message: `Cleared all ${cleared} assets from your cloud database.`,
+      });
+      return cleared;
+    } catch (err) {
+      console.error('Error clearing assets in Firestore:', err);
+      return 0;
     }
   };
 
@@ -1847,6 +2106,294 @@ Previous Repairs: ${activeScannedAsset.repairHistory.map((r) => `[${r.date}] ${r
     });
   };
 
+  // --- TOOLS & SUPPLIES HANDLERS ---
+  const addToolOrSupplyItem = async (
+    item: Omit<LabInventoryItem, 'id' | 'createdAt' | 'updatedAt' | 'updatedBy'>
+  ) => {
+    const id = `item_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const now = new Date().toISOString();
+    const newItem: LabInventoryItem = {
+      ...item,
+      id,
+      createdAt: now,
+      updatedAt: now,
+      updatedBy: currentUser?.displayName || 'Technician',
+    };
+
+    setToolsAndSupplies((prev) => [newItem, ...prev]);
+    try {
+      await saveToolOrSupplyToFirestore(newItem);
+    } catch (e) {
+      console.warn('Firestore write warning for tool item:', e);
+    }
+
+    addToast({
+      type: 'success',
+      title: 'Item Registered',
+      message: `${newItem.name} added to ${newItem.itemType === 'supply' ? 'Consumables' : 'Tools & Equipment'}.`,
+    });
+  };
+
+  const updateToolOrSupplyItem = async (id: string, updates: Partial<LabInventoryItem>) => {
+    const now = new Date().toISOString();
+    setToolsAndSupplies((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...updates, updatedAt: now } : item))
+    );
+
+    const existing = toolsAndSupplies.find((i) => i.id === id);
+    if (existing) {
+      const merged: LabInventoryItem = {
+        ...existing,
+        ...updates,
+        updatedAt: now,
+        updatedBy: currentUser?.displayName || existing.updatedBy || 'Technician',
+      };
+      try {
+        await saveToolOrSupplyToFirestore(merged);
+      } catch (e) {
+        console.warn('Firestore update warning for tool item:', e);
+      }
+    }
+  };
+
+  const deleteToolOrSupplyItem = async (id: string) => {
+    const existing = toolsAndSupplies.find((i) => i.id === id);
+    setToolsAndSupplies((prev) => prev.filter((i) => i.id !== id));
+    try {
+      await deleteToolOrSupplyFromFirestore(id);
+    } catch (e) {
+      console.warn('Firestore delete warning for tool item:', e);
+    }
+
+    addToast({
+      type: 'info',
+      title: 'Item Removed',
+      message: `${existing?.name || 'Item'} was deleted from inventory.`,
+    });
+  };
+
+  const checkoutToolItem = async (
+    itemId: string,
+    checkout: { userId: string; userName: string; benchStation: string; expectedReturn?: string; taskNotes?: string }
+  ) => {
+    const item = toolsAndSupplies.find((i) => i.id === itemId);
+    if (!item) return;
+
+    const checkoutRecord = {
+      ...checkout,
+      checkedOutAt: new Date().toISOString(),
+    };
+
+    await updateToolOrSupplyItem(itemId, {
+      status: 'checked_out',
+      checkedOutBy: checkoutRecord,
+    });
+
+    addToast({
+      type: 'warning',
+      title: 'Tool Clocked Out',
+      message: `${item.name} clocked out by ${checkout.userName} (${checkout.benchStation}).`,
+    });
+  };
+
+  const returnToolItem = async (itemId: string, returnNotes?: string, condition?: ToolCondition) => {
+    const item = toolsAndSupplies.find((i) => i.id === itemId);
+    if (!item) return;
+
+    const prevUser = item.checkedOutBy?.userName || 'Technician';
+    const noteAppend = returnNotes
+      ? `${item.notes ? item.notes + ' | ' : ''}Returned by ${prevUser}: ${returnNotes}`
+      : item.notes;
+
+    await updateToolOrSupplyItem(itemId, {
+      status: 'available',
+      checkedOutBy: undefined,
+      condition: condition || item.condition,
+      notes: noteAppend,
+    });
+
+    addToast({
+      type: 'success',
+      title: 'Tool Returned',
+      message: `${item.name} returned to ${item.locationName || 'lab inventory'} and marked Available.`,
+    });
+  };
+
+  const useConsumableSupply = async (itemId: string, quantityUsed: number, purposeNotes?: string) => {
+    const item = toolsAndSupplies.find((i) => i.id === itemId);
+    if (!item) return;
+
+    const currentQty = item.quantityOnHand || 0;
+    const newQty = Math.max(0, currentQty - quantityUsed);
+    const isDepleted = newQty <= 0;
+
+    const noteAppend = purposeNotes
+      ? `${item.notes ? item.notes + ' | ' : ''}Used ${quantityUsed} on ${new Date().toLocaleDateString()}: ${purposeNotes}`
+      : item.notes;
+
+    await updateToolOrSupplyItem(itemId, {
+      quantityOnHand: newQty,
+      status: isDepleted ? 'depleted' : 'available',
+      notes: noteAppend,
+    });
+
+    addToast({
+      type: isDepleted ? 'error' : 'info',
+      title: isDepleted ? 'Supply Depleted!' : 'Stock Usage Recorded',
+      message: isDepleted
+        ? `${item.name} is now depleted! Please reorder.`
+        : `Deducted ${quantityUsed} ${item.unitOfMeasure || 'units'} of ${item.name}. Remaining: ${newQty}`,
+    });
+  };
+
+  // --- CUSTOM PHYSICAL LOCATION HANDLERS ---
+  const addLabLocation = async (
+    location: Omit<LabLocation, 'id' | 'createdAt' | 'itemCount'>
+  ): Promise<LabLocation> => {
+    const id = `loc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const now = new Date().toISOString();
+    const newLoc: LabLocation = {
+      ...location,
+      id,
+      itemCount: 0,
+      createdAt: now,
+      createdBy: currentUser?.displayName || 'Technician',
+    };
+
+    setLabLocations((prev) => [...prev, newLoc]);
+    try {
+      await saveLabLocationToFirestore(newLoc);
+    } catch (e) {
+      console.warn('Firestore write warning for lab location:', e);
+    }
+
+    addToast({
+      type: 'success',
+      title: 'Location Created',
+      message: `"${newLoc.name}" is now available for tool and equipment storage.`,
+    });
+
+    return newLoc;
+  };
+
+  const updateLabLocation = async (id: string, updates: Partial<LabLocation>) => {
+    setLabLocations((prev) =>
+      prev.map((loc) => (loc.id === id ? { ...loc, ...updates, updatedAt: new Date().toISOString() } : loc))
+    );
+
+    const existing = labLocations.find((l) => l.id === id);
+    if (existing) {
+      const merged: LabLocation = {
+        ...existing,
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      };
+      try {
+        await saveLabLocationToFirestore(merged);
+      } catch (e) {
+        console.warn('Firestore update warning for location:', e);
+      }
+    }
+  };
+
+  const deleteLabLocation = async (id: string) => {
+    const loc = labLocations.find((l) => l.id === id);
+    setLabLocations((prev) => prev.filter((l) => l.id !== id));
+
+    // Also unassign items that were in this location
+    setToolsAndSupplies((prev) =>
+      prev.map((item) =>
+        item.locationId === id
+          ? { ...item, locationId: undefined, locationName: undefined }
+          : item
+      )
+    );
+
+    try {
+      await deleteLabLocationFromFirestore(id);
+    } catch (e) {
+      console.warn('Firestore delete warning for location:', e);
+    }
+
+    addToast({
+      type: 'info',
+      title: 'Location Removed',
+      message: `Location "${loc?.name || id}" removed. Contained items reassigned to Blank/Unassigned.`,
+    });
+  };
+
+  // --- QUALITY ENSURER HANDLERS ---
+  const addQualityInspection = async (
+    inspection: Omit<QualityInspection, 'id' | 'certificateNumber' | 'certificateHash' | 'createdAt' | 'updatedAt'>
+  ): Promise<QualityInspection> => {
+    const id = `qa_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const now = new Date().toISOString();
+    const certNum = `TT-QA-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const certHash = `CERT-${Math.random().toString(16).substring(2, 10).toUpperCase()}`;
+
+    const newInspection: QualityInspection = {
+      ...inspection,
+      id,
+      certificateNumber: certNum,
+      certificateHash: certHash,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    setQualityInspections((prev) => [newInspection, ...prev]);
+
+    try {
+      await saveQualityInspectionToFirestore(newInspection);
+    } catch (e) {
+      console.warn('Firestore write warning for quality inspection:', e);
+    }
+
+    addToast({
+      type: newInspection.overallStatus === 'passed' ? 'success' : 'warning',
+      title: newInspection.overallStatus === 'passed' ? 'Quality Certified!' : 'QA Review Logged',
+      message: `${newInspection.deviceModel} certified with Certificate #${certNum}. Status: ${newInspection.overallStatus.toUpperCase()}.`,
+    });
+
+    return newInspection;
+  };
+
+  const updateQualityInspection = async (id: string, updates: Partial<QualityInspection>) => {
+    const now = new Date().toISOString();
+    setQualityInspections((prev) =>
+      prev.map((qa) => (qa.id === id ? { ...qa, ...updates, updatedAt: now } : qa))
+    );
+
+    const existing = qualityInspections.find((q) => q.id === id);
+    if (existing) {
+      const merged: QualityInspection = {
+        ...existing,
+        ...updates,
+        updatedAt: now,
+      };
+      try {
+        await saveQualityInspectionToFirestore(merged);
+      } catch (e) {
+        console.warn('Firestore update warning for quality inspection:', e);
+      }
+    }
+  };
+
+  const deleteQualityInspection = async (id: string) => {
+    const existing = qualityInspections.find((q) => q.id === id);
+    setQualityInspections((prev) => prev.filter((q) => q.id !== id));
+    try {
+      await deleteQualityInspectionFromFirestore(id);
+    } catch (e) {
+      console.warn('Firestore delete warning for quality inspection:', e);
+    }
+
+    addToast({
+      type: 'info',
+      title: 'QA Record Removed',
+      message: `Inspection for ${existing?.deviceModel || 'device'} deleted.`,
+    });
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -1920,6 +2467,8 @@ Previous Repairs: ${activeScannedAsset.repairHistory.map((r) => `[${r.date}] ${r
         importHardwareAssets,
         addAssetRepairLog,
         deleteHardwareAsset,
+        purgeDemoAssets,
+        clearAllHardwareAssets,
 
         timeClockEntries,
         clockInTechnician,
@@ -1939,6 +2488,28 @@ Previous Repairs: ${activeScannedAsset.repairHistory.map((r) => `[${r.date}] ${r
         updateComLabLayout,
         resetComLabToSchoolDefaults,
         simulateTelemetryHeartbeat,
+
+        // Tools, Supplies & Equipment Inventory
+        toolsAndSupplies,
+        labLocations,
+        addToolOrSupplyItem,
+        updateToolOrSupplyItem,
+        deleteToolOrSupplyItem,
+        checkoutToolItem,
+        returnToolItem,
+        useConsumableSupply,
+
+        // Custom Location Management
+        addLabLocation,
+        updateLabLocation,
+        deleteLabLocation,
+
+        // Quality Ensurer Certification
+        qualityInspections,
+        addQualityInspection,
+        updateQualityInspection,
+        deleteQualityInspection,
+
         // Theme & Appearance
         themeMode,
         setThemeMode,

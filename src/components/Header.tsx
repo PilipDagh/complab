@@ -34,6 +34,7 @@ import {
   Clock,
   Monitor,
   Settings,
+  Wrench,
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -52,6 +53,8 @@ export const Header: React.FC = () => {
     timeClockEntries,
     setIsScannerModalOpen,
     setIsSettingsModalOpen,
+    toolsAndSupplies,
+    qualityInspections,
   } = useApp();
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -200,6 +203,26 @@ export const Header: React.FC = () => {
       badge: currentUser?.clockedIn ? (
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Clocked In"></span>
       ) : undefined,
+    },
+    {
+      tab: 'tools',
+      label: 'Tools & Supplies',
+      icon: <Wrench className="w-3.5 h-3.5 text-amber-400" />,
+      badge: (
+        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+          {toolsAndSupplies.length}
+        </span>
+      ),
+    },
+    {
+      tab: 'quality',
+      label: 'Quality Ensurer',
+      icon: <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />,
+      badge: (
+        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+          {qualityInspections.length}
+        </span>
+      ),
     },
     {
       tab: 'comlab',
@@ -587,6 +610,36 @@ export const Header: React.FC = () => {
               >
                 <Clock className="w-4 h-4 text-emerald-400" />
                 <span>Technician Time Clock & Activity Logger</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab('tools');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex items-center gap-2 p-2 rounded-lg border text-left col-span-2 ${
+                  activeTab === 'tools'
+                    ? 'bg-amber-950/40 border-amber-500/50 text-amber-300 font-bold'
+                    : 'bg-gray-900 border-gray-800 text-gray-300 hover:text-white'
+                }`}
+              >
+                <Wrench className="w-4 h-4 text-amber-400" />
+                <span>Tools, Supplies & Location Inventory ({toolsAndSupplies.length})</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab('quality');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex items-center gap-2 p-2 rounded-lg border text-left col-span-2 ${
+                  activeTab === 'quality'
+                    ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300 font-bold'
+                    : 'bg-gray-900 border-gray-800 text-gray-300 hover:text-white'
+                }`}
+              >
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span>Quality Ensurer & Outbound Certs ({qualityInspections.length})</span>
               </button>
 
               <button

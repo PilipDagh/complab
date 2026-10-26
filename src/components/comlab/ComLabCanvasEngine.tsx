@@ -15,6 +15,8 @@ import {
   CheckCircle,
   AlertTriangle,
   ZapOff,
+  Terminal,
+  Activity,
 } from 'lucide-react';
 
 interface ComLabCanvasEngineProps {
@@ -23,6 +25,7 @@ interface ComLabCanvasEngineProps {
   onExitLabView: () => void;
   onOpenTelemetrySimulator: () => void;
   onOpenApiDocs: () => void;
+  onOpenConnectAgent?: () => void;
   isOwner: boolean;
   onToggleAdminMode: () => void;
 }
@@ -47,6 +50,7 @@ export const ComLabCanvasEngine: React.FC<ComLabCanvasEngineProps> = ({
   onExitLabView,
   onOpenTelemetrySimulator,
   onOpenApiDocs,
+  onOpenConnectAgent,
   isOwner,
   onToggleAdminMode,
 }) => {
@@ -226,7 +230,21 @@ export const ComLabCanvasEngine: React.FC<ComLabCanvasEngineProps> = ({
   const wsMap = useMemo(() => {
     const map = new Map<string, ComLabWorkstation>();
     workstations.forEach((ws) => {
+      // Primary key expected by SVG rendering: 'A_1', 'B_2', 'C_3', 'D_4'
+      if (ws.rowId) {
+        map.set(`${ws.rowId}_${ws.slotNumber}`, ws);
+      }
+      // Also extract letter from rowLabel (e.g. 'Row A' -> 'A')
+      const cleanRowLetter = ws.rowLabel?.replace(/^Row\s*/i, '').trim();
+      if (cleanRowLetter) {
+        map.set(`${cleanRowLetter}_${ws.slotNumber}`, ws);
+      }
+      // Additional fallback keys
       map.set(`${ws.rowLabel}_${ws.slotNumber}`, ws);
+      map.set(ws.id, ws);
+      if (ws.id.startsWith('pc_')) {
+        map.set(ws.id.replace('pc_', ''), ws);
+      }
     });
     return map;
   }, [workstations]);
@@ -265,7 +283,14 @@ export const ComLabCanvasEngine: React.FC<ComLabCanvasEngineProps> = ({
     D: 750,
   };
 
-  // Helper to render LED indicator dot
+  // Helper to render LED indicator dot strictly matching user's 6-state hardware specification:
+  // 1. Solid Green: Working fine, powered on, live heartbeat (< 1s)
+  // 2. Blinking Green: Worked last time, now turned off or stopped transmitting
+  // 3. Blinking Orange: PC had some errors but bootable
+  // 4. Solid Orange: Maintenance / non-fatal warning
+  // 5. Blinking Red: Bad error, recoverable
+  // 6. Solid Red: PC is FUCKED! Critical fatal failure
+  // 7. Solid Gray: PC just isn't connected at all (never connected)
   const renderLedDot = (status: ComLabStatusLevel | undefined) => {
     if (status === 'green') {
       return (
@@ -274,8 +299,34 @@ export const ComLabCanvasEngine: React.FC<ComLabCanvasEngineProps> = ({
           cy="18"
           r="4.5"
           fill="#10b981"
-          className="animate-glow-green"
+          className="animate-solid-green"
           stroke="#059669"
+          strokeWidth="1"
+        />
+      );
+    }
+    if (status === 'blinking_green') {
+      return (
+        <circle
+          cx="170"
+          cy="18"
+          r="4.5"
+          fill="#10b981"
+          className="animate-blink-green"
+          stroke="#059669"
+          strokeWidth="1"
+        />
+      );
+    }
+    if (status === 'blinking_orange') {
+      return (
+        <circle
+          cx="170"
+          cy="18"
+          r="4.5"
+          fill="#f59e0b"
+          className="animate-blink-orange"
+          stroke="#d97706"
           strokeWidth="1"
         />
       );
@@ -293,20 +344,33 @@ export const ComLabCanvasEngine: React.FC<ComLabCanvasEngineProps> = ({
         />
       );
     }
-    if (status === 'red') {
+    if (status === 'blinking_red') {
       return (
         <circle
           cx="170"
           cy="18"
           r="5"
           fill="#ef4444"
-          className="animate-strobe-1hz"
+          className="animate-blink-red"
           stroke="#b91c1c"
           strokeWidth="1"
         />
       );
     }
-    // Muted/gray unconfigured dot
+    if (status === 'red') {
+      return (
+        <circle
+          cx="170"
+          cy="18"
+          r="5.5"
+          fill="#dc2626"
+          className="animate-solid-red"
+          stroke="#991b1b"
+          strokeWidth="1.2"
+        />
+      );
+    }
+    // Solid Gray: PC just isn't connected at all
     return (
       <circle
         cx="170"
@@ -315,9 +379,158 @@ export const ComLabCanvasEngine: React.FC<ComLabCanvasEngineProps> = ({
         fill="#64748b"
         stroke="#475569"
         strokeWidth="1"
-        opacity="0.75"
+        className="led-solid-gray"
+        opacity="0.85"
       />
     );
+  };
+
+  // Helper to render on-desk diagnostic badges / error codes directly on the canvas surface
+  const renderDeskBadge = (ws: ComLabWorkstation) => {
+    const errCode = ws.telemetry?.errorCode;
+    const errName = ws.telemetry?.errorName;
+    const isOfflineWasOn = ws.statusLevel === 'blinking_green';
+    const isBootableErr = ws.statusLevel === 'blinking_orange';
+    const isRecoverableErr = ws.statusLevel === 'blinking_red';
+    const isFatal = ws.statusLevel === 'red';
+
+    if (errCode || errName) {
+      const displayLabel = (errCode || errName || 'ERROR').slice(0, 16);
+      return (
+        <g transform="translate(18, 70)">
+          <rect
+            x="0"
+            y="0"
+            width="140"
+            height="16"
+            rx="3"
+            fill={isFatal ? '#581c87' : isRecoverableErr ? '#7f1d1d' : '#78350f'}
+            stroke={isFatal ? '#a855f7' : isRecoverableErr ? '#ef4444' : '#f59e0b'}
+            strokeWidth="0.8"
+            opacity="0.95"
+          />
+          <text
+            x="70"
+            y="11.5"
+            textAnchor="middle"
+            fill={isFatal ? '#f3e8ff' : isRecoverableErr ? '#fecaca' : '#fef3c7'}
+            fontSize="8"
+            fontWeight="800"
+            fontFamily="monospace"
+          >
+            ⚠️ {displayLabel}
+          </text>
+        </g>
+      );
+    }
+
+    if (isOfflineWasOn) {
+      return (
+        <g transform="translate(18, 70)">
+          <rect
+            x="0"
+            y="0"
+            width="130"
+            height="16"
+            rx="3"
+            fill="#064e3b"
+            stroke="#10b981"
+            strokeWidth="0.8"
+            opacity="0.9"
+          />
+          <text
+            x="65"
+            y="11.5"
+            textAnchor="middle"
+            fill="#a7f3d0"
+            fontSize="8"
+            fontWeight="700"
+            fontFamily="monospace"
+          >
+            OFFLINE (WAS ONLINE)
+          </text>
+        </g>
+      );
+    }
+
+    if (isBootableErr) {
+      return (
+        <g transform="translate(18, 70)">
+          <rect
+            x="0"
+            y="0"
+            width="130"
+            height="16"
+            rx="3"
+            fill="#78350f"
+            stroke="#f59e0b"
+            strokeWidth="0.8"
+            opacity="0.9"
+          />
+          <text
+            x="65"
+            y="11.5"
+            textAnchor="middle"
+            fill="#fef3c7"
+            fontSize="8"
+            fontWeight="700"
+            fontFamily="monospace"
+          >
+            BOOTABLE WARNING
+          </text>
+        </g>
+      );
+    }
+
+    if (isFatal) {
+      return (
+        <g transform="translate(18, 70)">
+          <rect
+            x="0"
+            y="0"
+            width="130"
+            height="16"
+            rx="3"
+            fill="#7f1d1d"
+            stroke="#dc2626"
+            strokeWidth="1"
+            opacity="0.95"
+          />
+          <text
+            x="65"
+            y="11.5"
+            textAnchor="middle"
+            fill="#fee2e2"
+            fontSize="8"
+            fontWeight="900"
+            fontFamily="monospace"
+          >
+            FATAL FAILURE ("FUCKED")
+          </text>
+        </g>
+      );
+    }
+
+    // Live Telemetry subtle stats line if healthy & active
+    if (ws.statusLevel === 'green' && ws.telemetry?.cpuTempCelsius) {
+      return (
+        <g transform="translate(18, 74)">
+          <text
+            x="0"
+            y="8"
+            fill="#10b981"
+            fontSize="8"
+            fontWeight="700"
+            fontFamily="monospace"
+            opacity="0.9"
+          >
+            LIVE • {ws.telemetry.cpuTempCelsius}°C • {ws.telemetry.cpuUsagePercent ?? 12}% CPU
+          </text>
+        </g>
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -807,6 +1020,9 @@ export const ComLabCanvasEngine: React.FC<ComLabCanvasEngineProps> = ({
 
                   {/* Single Glowing LED Light Dot in top-right corner of monitor/tower */}
                   {renderLedDot(ws.statusLevel)}
+
+                  {/* Real-time Diagnostics Badge on Desk Surface */}
+                  {renderDeskBadge(ws)}
                 </g>
               );
             })}
@@ -954,6 +1170,9 @@ export const ComLabCanvasEngine: React.FC<ComLabCanvasEngineProps> = ({
 
                   {/* Single Glowing LED Light Dot */}
                   {renderLedDot(ws.statusLevel)}
+
+                  {/* Real-time Diagnostics Badge on Desk Surface */}
+                  {renderDeskBadge(ws)}
                 </g>
               );
             })}
@@ -1096,6 +1315,9 @@ export const ComLabCanvasEngine: React.FC<ComLabCanvasEngineProps> = ({
 
                   {/* Single Glowing LED Light Dot */}
                   {renderLedDot(ws.statusLevel)}
+
+                  {/* Real-time Diagnostics Badge on Desk Surface */}
+                  {renderDeskBadge(ws)}
                 </g>
               );
             })}
@@ -1242,6 +1464,9 @@ export const ComLabCanvasEngine: React.FC<ComLabCanvasEngineProps> = ({
 
                   {/* Single Glowing LED Light Dot */}
                   {renderLedDot(ws.statusLevel)}
+
+                  {/* Real-time Diagnostics Badge on Desk Surface */}
+                  {renderDeskBadge(ws)}
                 </g>
               );
             })}
@@ -1273,8 +1498,19 @@ export const ComLabCanvasEngine: React.FC<ComLabCanvasEngineProps> = ({
         </div>
       </div>
 
-      {/* Top Right: Role switcher + Telemetry & Docs Triggers */}
+      {/* Top Right: Role switcher + Connect PC Agent + Telemetry & Docs Triggers */}
       <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+        {/* Connect PC Agent Button */}
+        {onOpenConnectAgent && (
+          <button
+            onClick={onOpenConnectAgent}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/90 backdrop-blur-md border border-emerald-500 text-emerald-300 hover:text-white hover:bg-emerald-900 transition-all text-xs font-mono font-bold shadow-[0_0_15px_rgba(16,185,129,0.35)]"
+            title="Connect physical PC via 1-line command or startup service"
+          >
+            <Terminal className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+            <span>Connect PC Agent</span>
+          </button>
+        )}
         {/* Telemetry Simulator Trigger */}
         <button
           onClick={onOpenTelemetrySimulator}

@@ -267,7 +267,15 @@ export interface TimeClockEntry {
 
 // --- COMLAB STATUS & AERIAL ROOM TYPES ---
 
-export type ComLabStatusLevel = 'green' | 'orange' | 'red' | 'unconfigured';
+export type ComLabStatusLevel =
+  | 'green'           // Solid green: working fine, powered on, live heartbeat (< 3s)
+  | 'blinking_green'  // Blinking green: previously healthy, now powered off / disconnected
+  | 'orange'          // Solid orange: maintenance / attention
+  | 'blinking_orange' // Blinking orange: bootable with non-fatal errors / warnings
+  | 'blinking_red'    // Blinking red: bad recoverable error
+  | 'red'             // Solid red: critical / fatal failure ("PC is FUCKED!")
+  | 'unconfigured';   // Solid gray: never connected / no signal
+
 export type ComLabPowerState = 'powered_on' | 'standby' | 'powered_off' | 'no_power_cable' | 'unplugged';
 
 export interface ComLabHardwareComponents {
@@ -283,13 +291,62 @@ export interface ComLabHardwareComponents {
   missingPartsDescription?: string;
 }
 
+export interface ComLabDiskTelemetry {
+  name: string;
+  model?: string;
+  sizeGb: number;
+  freeGb: number;
+  tempCelsius?: number;
+  readSpeedMb?: number;
+  writeSpeedMb?: number;
+  smartHealth: 'Healthy' | 'Warning' | 'Critical';
+}
+
 export interface ComLabTelemetryData {
   ipAddress?: string;
   macAddress?: string;
   hostname?: string;
   os?: string;
+  kernel?: string;
+  uptimeSeconds?: number;
+  cpuModel?: string;
+  cpuCores?: number;
+  cpuThreads?: number;
+  cpuClockMhz?: number;
   cpuTempCelsius?: number;
+  coreTempsCelsius?: number[];
+  cpuUsagePercent?: number;
+  cpuVoltage?: number;
+  isThrottling?: boolean;
+  ramTotalMb?: number;
+  ramUsedMb?: number;
   ramUsagePercent?: number;
+  ramSpeedMhz?: number;
+  ramSlotsUsed?: string;
+  gpuModel?: string;
+  gpuTempCelsius?: number;
+  gpuUsagePercent?: number;
+  gpuVramUsedMb?: number;
+  gpuVramTotalMb?: number;
+  gpuFanPercent?: number;
+  disks?: ComLabDiskTelemetry[];
+  network?: {
+    linkSpeedMbps?: number;
+    rxBytesSec?: number;
+    txBytesSec?: number;
+    gateway?: string;
+    dns?: string;
+  };
+  motherboard?: {
+    manufacturer?: string;
+    model?: string;
+    biosVersion?: string;
+    biosDate?: string;
+  };
+  errorCode?: string;
+  errorName?: string;
+  errorDescription?: string;
+  errorSeverity?: 'info' | 'warning' | 'error' | 'fatal';
   diskHealth?: 'Healthy' | 'Warning' | 'Failing' | 'Missing';
   lastPing?: string;
   agentVersion?: string;
@@ -350,4 +407,130 @@ export interface ComLabLayoutConfig {
   updatedAt: string;
   updatedBy: string;
 }
+
+// --- TOOLS, SUPPLIES & EQUIPMENT INVENTORY TYPES ---
+
+export type LabItemType = 'tool' | 'supply' | 'equipment';
+export type LabItemStatus = 'available' | 'checked_out' | 'maintenance' | 'depleted';
+export type ToolCondition = 'new' | 'good' | 'fair' | 'damaged' | 'missing_parts';
+
+export interface ToolCheckoutRecord {
+  userId: string;
+  userName: string;
+  benchStation: string;
+  checkedOutAt: string; // ISO string
+  expectedReturn?: string; // ISO date/time
+  taskNotes?: string;
+}
+
+export interface LabInventoryItem {
+  id: string;
+  name: string;
+  itemType: LabItemType;
+  category: string; // e.g. "Soldering", "Meters", "Hand Tools", "Power Tools", "ESD Safety", "Chemicals/Solvents", "Cables & Adapters", "Consumables"
+  skuOrTag?: string; // e.g. "TL-FLK-87V", "SUP-MX4-4G"
+  brand?: string;
+  model?: string;
+  serialNumber?: string;
+  
+  // Physical lab location tracking (Supports blank/unassigned)
+  locationId?: string; // e.g. "loc_tool_chest_b" or undefined / empty
+  locationName?: string; // e.g. "Tool Chest B - Drawer 2" or "Unassigned"
+  
+  status: LabItemStatus;
+  condition: ToolCondition;
+  checkedOutBy?: ToolCheckoutRecord;
+  
+  // Consumable quantity tracking
+  quantityOnHand?: number;
+  unitOfMeasure?: string; // "tubes", "spools", "bottles", "packs", "units"
+  minReorderLevel?: number;
+  
+  purchaseDate?: string;
+  cost?: number;
+  notes?: string;
+  barcode?: string;
+  photoUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+  updatedBy: string;
+}
+
+// --- CUSTOM PHYSICAL LAB LOCATIONS ---
+
+export type LabZoneType =
+  | 'tool_storage'
+  | 'bench_area'
+  | 'mobile_cart'
+  | 'secure_cabinet'
+  | 'clean_room'
+  | 'chemical_locker'
+  | 'staging_shelf';
+
+export interface LabLocation {
+  id: string;
+  name: string; // e.g. "Tool Chest A - Top Drawer", "Solder Bench 1", "Clean Room Shelf"
+  zoneType: LabZoneType;
+  description?: string;
+  itemCount?: number;
+  createdAt: string;
+  createdBy: string;
+  updatedAt?: string;
+}
+
+// --- QUALITY ENSURER OUTBOUND CERTIFICATION ---
+
+export interface QualityChecksRubric {
+  // 1. Electrical & Safety Integrity
+  powerSupplyGroundVerified: boolean;
+  cablesInsulatedNoExposedWire: boolean;
+  powerRailVoltagesNormal: boolean;
+  esdGroundingDischarged: boolean;
+  
+  // 2. Hardware Stability & Burn-In
+  cpuThermalsUnderLoadPass: boolean;
+  maxCpuTempCelsius: number;
+  ramMemtestStable: boolean;
+  storageSmartHealthClean: boolean;
+  gpuStabilityTestPass: boolean;
+  coolingFansSpinFreely: boolean;
+  
+  // 3. Clean OS & Driver Validation
+  cleanOsInstalledAndActivated: boolean;
+  allDriversFunctionalNoUnknown: boolean;
+  benchProfilesRemoved: boolean;
+  biosFirmwareUpdated: boolean;
+  antivirusEnabledAndUpdated: boolean;
+  
+  // 4. Physical Detailing & Sanitation
+  chassisCleanedAndSanitized: boolean;
+  screenSpotlessNoFingerprints: boolean;
+  portsDustFree: boolean;
+  accessoriesAndPowerLeadBagged: boolean;
+}
+
+export interface QualityInspection {
+  id: string;
+  certificateNumber: string; // e.g. "TT-QA-2026-0814"
+  workOrderId?: string;
+  assetTag?: string;
+  deviceModel: string;
+  serialNumber?: string;
+  deviceType: 'Desktop Tower' | 'Laptop' | 'Server' | 'All-in-One' | 'Custom Rig';
+  clientOrRecipient: string;
+  technicianName: string;
+  inspectorName: string;
+  inspectionDate: string; // ISO date
+  
+  checks: QualityChecksRubric;
+  
+  overallStatus: 'passed' | 'rework_required' | 'rejected';
+  inspectorNotes?: string;
+  benchVoltagesRecorded?: string; // e.g. "+12.1V, +5.05V, +3.32V"
+  approvedForOutboundRelease: boolean;
+  certificateHash?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 

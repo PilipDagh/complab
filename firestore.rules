@@ -39,6 +39,21 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Tools, Supplies & Equipment Inventory Collection
+    match /tools_supplies/{itemId} {
+      allow read, write: if true;
+    }
+
+    // Custom Physical Lab Locations Collection
+    match /lab_locations/{locationId} {
+      allow read, write: if true;
+    }
+
+    // Quality Ensurer Outbound Inspections Collection
+    match /quality_inspections/{inspectionId} {
+      allow read, write: if true;
+    }
+
     // System Metadata
     match /system/{docId} {
       allow read, write: if true;
